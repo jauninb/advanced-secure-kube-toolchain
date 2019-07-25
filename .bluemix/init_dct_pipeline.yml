@@ -140,9 +140,9 @@ stages:
       #set -x
       tar xvzf private_keys_backup.tar.gz
 
-      echo "Checking cluster namespace $CLUSTER_NAMESPACE"
-      if ! kubectl get namespace "$CLUSTER_NAMESPACE"; then
-        kubectl create namespace "$CLUSTER_NAMESPACE"
+      echo "Checking cluster namespace $BUILD_CLUSTER_NAMESPACE"
+      if ! kubectl get namespace "$BUILD_CLUSTER_NAMESPACE"; then
+        kubectl create namespace "$BUILD_CLUSTER_NAMESPACE"
       fi
 
       # Iterate on the signers for the $GUN 
@@ -161,13 +161,13 @@ stages:
         else 
           # ensure the secret is not already existing
           kubectl delete secret "$REGISTRY_NAMESPACE.$IMAGE_NAME.$DEVOPS_SIGNER" \
-          -n$CLUSTER_NAMESPACE \
+          -n$BUILD_CLUSTER_NAMESPACE \
           --ignore-not-found=true
         fi
 
         # Store the GUN to a specific secret
         kubectl create secret generic "$REGISTRY_NAMESPACE.$IMAGE_NAME.$DEVOPS_SIGNER" \
-        -n$CLUSTER_NAMESPACE \
+        -n$BUILD_CLUSTER_NAMESPACE \
         --from-literal=DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE="$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" \
         --from-literal=DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE="$DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE" \
         --from-literal=PEM_FILE_NAME="$PEM_FILE_NAME" \
