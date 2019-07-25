@@ -10,7 +10,7 @@ properties:
 - name: BUILD_CLUSTER
   value: ${BUILD_CLUSTER_NAME}
   type: text
-- name: CLUSTER_NAMESPACE
+- name: BUILD_CLUSTER_NAMESPACE
   value: ${BUILD_CLUSTER_NAMESPACE}
   type: text
 - name: IBM_CLOUD_API_KEY
@@ -112,7 +112,7 @@ stages:
       # Restore root and repository keys
       tar xvzf private_keys_backup.tar.gz --directory ~
 
-      # Create thenew  signer key
+      # Create the new signer key
       source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/create_dct_signer_key.sh")
 - name: Create K8S secret for image signing
   inputs:
@@ -178,8 +178,6 @@ stages:
   - type: job
     stage: Create Signer
     job: Create Signer Keys
-  triggers:
-  - type: stage
   permission:
     execute: TOOLCHAIN_ADMINS
   properties:
