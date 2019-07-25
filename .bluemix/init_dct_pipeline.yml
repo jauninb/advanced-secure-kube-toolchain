@@ -26,7 +26,7 @@ stages:
     value: ${REGISTRY_NAMESPACE}
     type: text
   - name: IMAGE_NAME
-    value: ${CF_APP_NAME}
+    value: ${APP_NAME}
     type: text
   - name: DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE
     value: ${DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE}
