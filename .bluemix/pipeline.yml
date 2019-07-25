@@ -104,6 +104,9 @@ stages:
   - name: DEVOPS_SIGNER
     value: ${SIGNER}
     type: text
+  - name: IMAGE_NAME
+    value: ${APP_NAME}
+    type: text
   - name: IBM_CLOUD_API_KEY
     value: ${API_KEY}
     type: secure
@@ -175,11 +178,22 @@ stages:
       source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_ci-dct_env.sh")
       export DCT_DISABLED=false
       source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/build_image_dind.sh")
+- name: VALIDATE
+  inputs:
+  - type: job
+    stage: CONTAINERIZE
+    job: Build Signed Docker image
+  triggers:
+  - type: stage
+  properties:
+  - name: buildprops
+    value: build.properties
+    type: file
+  jobs:
   - name: Check vulnerabilities
     type: tester
     test_type: vulnerabilityadvisor
     use_image_from_build_input: true
-    fail_stage: false
     target:
       region_id: ${REGISTRY_REGION_ID}
       api_key: ${API_KEY}
@@ -187,19 +201,16 @@ stages:
       #!/bin/bash
       # uncomment to debug the script
       # set -x
-      # copy the script below into your app code repo (e.g. ./scripts/check_vulnerabilities.sh) and 'source' it from your pipeline job
-      #    source ./scripts/check_vulnerabilities.sh
-      # alternatively, you can source it from online script:
-      #    source <(curl -sSL "https://raw.githubusercontent.com/open-toolchain/commons/master/scripts/check_vulnerabilities.sh")
-      # ------------------
-      # source: https://raw.githubusercontent.com/open-toolchain/commons/master/scripts/check_vulnerabilities.sh
       # Check for vulnerabilities of built image using Vulnerability Advisor
+      # PIPELINE_IMAGE_URL is defined because of tester type VA and use_image_from_build_input: true
+      # unset it in order to recompute using build.properties value
+      unset PIPELINE_IMAGE_URL
       source <(curl -sSL "https://raw.githubusercontent.com/open-toolchain/commons/master/scripts/check_vulnerabilities.sh")
 - name: DEPLOY
   inputs:
   - type: job
     stage: CONTAINERIZE
-    job: Build container image
+    job: Build Signed Docker image
   triggers:
   - type: stage
   properties:
