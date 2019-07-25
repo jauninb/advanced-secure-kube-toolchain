@@ -59,6 +59,30 @@ services:
           PROD_RESOURCE_GROUP: '{{form.pipeline.parameters.prod-resource-group}}'
           PROD_CLUSTER_NAME: '{{form.pipeline.parameters.prod-cluster-name}}'
           PROD_CLUSTER_NAMESPACE: '{{form.pipeline.parameters.prod-cluster-namespace}}'
+        execute: false
+  init_dct:
+    service_id: pipeline
+    parameters:
+      name: 'dct init {{form.pipeline.parameters.registry-namespace}} {{form.pipeline.parameters.app-name}}'
+      configuration:
+        content:
+          $text: init_dct_pipeline.yml
+        env:
+            APP_NAME: '{{form.pipeline.parameters.app-name}}'
+            REGISTRY_REGION_ID: '{{form.pipeline.parameters.registry-region}}'
+            REGISTRY_NAMESPACE: '{{form.pipeline.parameters.registry-namespace}}'
+            API_KEY: '{{form.pipeline.parameters.api-key}}'
+            BUILD_REGION_ID: '{{form.pipeline.parameters.prod-region}}'
+            BUILD_RESOURCE_GROUP: '{{form.pipeline.parameters.prod-resource-group}}'
+            BUILD_CLUSTER_NAME: '{{form.pipeline.parameters.prod-cluster-name}}'
+            BUILD_CLUSTER_NAMESPACE: '{{form.pipeline.parameters.build-cluster-namespace}}'
+            SIGNER: '{{form.pipeline.parameters.signer}}'
+            DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE: '{{form.pipeline.parameters.docker_content_trust_root_passphrase}}'
+            DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE: '{{form.pipeline.parameters.docker_content_trust_repository_passphrase}}'
+            PROD_REGION_ID: '{{form.pipeline.parameters.prod-region}}'
+            PROD_RESOURCE_GROUP: '{{form.pipeline.parameters.prod-resource-group}}'
+            PROD_CLUSTER_NAME: '{{form.pipeline.parameters.prod-cluster-name}}'
+            PROD_CLUSTER_NAMESPACE: '{{form.pipeline.parameters.prod-cluster-namespace}}'
         execute: true
   webide:
     service_id: orion
@@ -67,5 +91,9 @@ form:
     parameters:
       app-name: '{{services.repo.parameters.repo_name}}'
       prod-cluster-namespace: prod
+      build-cluster-namespace: build
+      signer: 'devops-signer'
+      docker_content_trust_root_passphrase:
+      docker_content_trust_repository_passphrase:
     schema:
       $ref: deploy.json

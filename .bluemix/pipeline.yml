@@ -16,6 +16,9 @@ stages:
   - name: IMAGE_NAME
     value: ${APP_NAME}
     type: text
+  - name: IBM_CLOUD_API_KEY
+    value: ${API_KEY}
+    type: secure
   jobs:
   - name: Fetch code
     type: builder
@@ -74,6 +77,36 @@ stages:
   - name: DOCKER_FILE
     value: Dockerfile
     type: text
+  - name: DOCKER_ROOT
+    value: .
+    type: text
+  - name: DOCKER_FILE
+    value: Dockerfile
+    type: text  
+  - name: IBMCLOUD_TARGET_REGION
+    value: ${BUILD_REGION_ID}
+    type: text
+  - name: IBMCLOUD_TARGET_RESOURCE_GROUP
+    value: ${BUILD_RESOURCE_GROUP}
+    type: text
+  - name: BUILD_CLUSTER
+    value: ${BUILD_CLUSTER_NAME}
+    type: text
+  - name: BUILD_CLUSTER_NAMESPACE
+    value: ${BUILD_CLUSTER_NAMESPACE}
+    type: text
+  - name: REGISTRY_REGION
+    value: ${REGISTRY_REGION_ID}
+    type: text
+  - name: REGISTRY_NAMESPACE
+    value: ${REGISTRY_NAMESPACE}
+    type: text
+  - name: DEVOPS_SIGNER
+    value: ${SIGNER}
+    type: text
+  - name: IBM_CLOUD_API_KEY
+    value: ${API_KEY}
+    type: secure
   - name: PIPELINE_IMAGE_URL
     value: undefined
     type: text
@@ -121,30 +154,27 @@ stages:
 
       # This script checks presence of registry namespace.
       source <(curl -sSL "https://raw.githubusercontent.com/open-toolchain/commons/master/scripts/check_registry.sh")
-  - name: Build container image
+  - name: Build Signed Docker image
     type: builder
-    build_type: cr
-    artifact_dir: output
-    target:
-      region_id: ${REGISTRY_REGION_ID}
-      api_key: ${API_KEY}
-    namespace: ${REGISTRY_NAMESPACE}
-    image_name: ${APP_NAME}
+    curatedDockerImage: default
+    artifact_dir: ''
+    build_type: customimage
+    docker_image: jauninb/pbi-docker:latest
     script: |
       #!/bin/bash
-      # uncomment to debug the script
-      # set -x
-      # copy the script below into your app code repo (e.g. ./scripts/build_image.sh) and 'source' it from your pipeline job
-      #    source ./scripts/build_image.sh
-      # alternatively, you can source it from online script:
-      #    source <(curl -sSL "https://raw.githubusercontent.com/open-toolchain/commons/master/scripts/build_image.sh")
-      # ------------------
-      # source: https://raw.githubusercontent.com/open-toolchain/commons/master/scripts/build_image.sh
-
-      # This script does build a Docker image into IBM Container Service private image registry.
-      # Minting image tag using format: BUILD_NUMBER-BRANCH-COMMIT_ID-TIMESTAMP
-      # Also copies information into a build.properties file, so they can be reused later on by other scripts (e.g. image url, chart name, ...)
-      source <(curl -sSL "https://raw.githubusercontent.com/open-toolchain/commons/master/scripts/build_image.sh")
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_dind.sh")
+      # configure the container registry
+      REGISTRY_REGION=$(echo "$REGISTRY_REGION" | awk -F ':' '{print $NF;}')
+      ibmcloud cr region-set $REGISTRY_REGION
+      # login docker to ibm container registry
+      ibmcloud cr login
+      # Initialize the REGISTRY_URL and DOCKER_CONTENT_TRUST_SERVER
+      export REGISTRY_URL=$(ibmcloud cr info | grep -m1 -i '^Container Registry' | awk '{print $3;}')
+      export DOCKER_CONTENT_TRUST_SERVER="https://$REGISTRY_URL:4443"
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/extract_dct_env.sh")
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_ci-dct_env.sh")
+      export DCT_DISABLED=false
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/build_image_dind.sh")
   - name: Check vulnerabilities
     type: tester
     test_type: vulnerabilityadvisor

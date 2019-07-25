@@ -1,0 +1,239 @@
+---
+defaultBaseImageVersion: '2.0'
+properties:
+- name: IBMCLOUD_TARGET_REGION
+  value: ${BUILD_REGION_ID}
+  type: text
+- name: IBMCLOUD_TARGET_RESOURCE_GROUP
+  value: ${BUILD_RESOURCE_GROUP}
+  type: text
+- name: BUILD_CLUSTER
+  value: ${BUILD_CLUSTER_NAME}
+  type: text
+- name: CLUSTER_NAMESPACE
+  value: ${BUILD_CLUSTER_NAMESPACE}
+  type: text
+- name: IBM_CLOUD_API_KEY
+  value: ${API_KEY}
+  type: secure
+stages:
+- name: Init Docker Content Trust
+  properties:
+  - name: REGISTRY_REGION
+    value: ${REGISTRY_REGION_ID}
+    type: text
+  - name: REGISTRY_NAMESPACE
+    value: ${REGISTRY_NAMESPACE}
+    type: text
+  - name: IMAGE_NAME
+    value: ${CF_APP_NAME}
+    type: text
+  - name: DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE
+    value: ${DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE}
+    type: secure
+  - name: DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE
+    value: ${DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE}
+    type: secure
+  jobs:
+  - name: Create DCT Keys
+    type: builder
+    curatedDockerImage: default
+    artifact_dir: back-your-keys
+    build_type: customimage
+    docker_image: jauninb/pbi-docker:latest
+    script: |
+      #!/bin/bash
+
+      # Get the notary binary
+      curl -L https://github.com/theupdateframework/notary/releases/download/v0.6.1/notary-Linux-amd64 -o /usr/local/bin/notary
+      # Make it executable
+      chmod +x /usr/local/bin/notary
+
+      export IBMCLOUD_API_KEY=$IBM_CLOUD_API_KEY
+      export DOCKER_CONTENT_TRUST=1
+
+      # Setup Docker-In-Docker
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_dind.sh")
+
+      # configure the container registry
+      export REGISTRY_REGION=$(echo "$REGISTRY_REGION" | awk -F ':' '{print $NF;}')
+      ibmcloud cr region-set $REGISTRY_REGION
+      # login docker to ibm container registry
+      ibmcloud cr login
+
+      # check the existence of the container registry namespace
+      REGISTRY_URL=$(ibmcloud cr info | grep -m1 -i '^Container Registry' | awk '{print $3;}')
+      echo "Check for $REGISTRY_NAMESPACE existence"
+      if ibmcloud cr namespaces | tail --lines=+4 | head --lines=-2 | grep "^$REGISTRY_NAMESPACE"; then
+        echo "$REGISTRY_NAMESPACE exists in $REGISTRY_URL"
+      else 
+        echo "Creating REGISTRY_NAMESPACE in $REGISTRY_URL"
+        ibmcloud cr namespace-add $REGISTRY_NAMESPACE
+      fi
+
+      # Initialize the repository for Docker Content Trust
+      echo "Doing Docker Content Trust initialization for GUN $REGISTRY_URL/$REGISTRY_NAMESPACE/$IMAGE_NAME"
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/notary_init_gun.sh")
+- name: Create Signer
+  inputs:
+  - type: job
+    stage: Init Docker Content Trust
+    job: Create DCT Keys
+  properties:
+  - name: DEVOPS_SIGNER
+    value: ${SIGNER}
+    type: text
+  - name: dct_properties
+    value: dct.properties
+    type: file
+  jobs:
+  - name: Create Signer Keys
+    type: builder
+    curatedDockerImage: default
+    artifact_dir: back-your-keys
+    build_type: customimage
+    docker_image: jauninb/pbi-docker:latest
+    script: |
+      #!/bin/bash
+      echo "Create signer $DEVOPS_SIGNER for $REGISTRY_URL/$REGISTRY_NAMESPACE/$IMAGE_NAME"
+
+      export IBMCLOUD_API_KEY=$IBM_CLOUD_API_KEY
+      export DOCKER_CONTENT_TRUST=1
+
+      # Setup Docker-In-Docker
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_dind.sh")
+
+      # configure the container registry
+      export REGISTRY_REGION=$(echo "$REGISTRY_REGION" | awk -F ':' '{print $NF;}')
+      ibmcloud cr region-set $REGISTRY_REGION
+      # login docker to ibm container registry
+      ibmcloud cr login
+
+      # Restore root and repository keys
+      tar xvzf private_keys_backup.tar.gz --directory ~
+
+      # Create thenew  signer key
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/create_dct_signer_key.sh")
+- name: Create K8S secret for image signing
+  inputs:
+  - type: job
+    stage: Create Signer
+    job: Create Signer Keys
+  triggers:
+  - type: stage
+  properties:
+  - name: dct_properties
+    value: dct.properties
+    type: file
+  jobs:
+  - name: Create Secret
+    type: deployer
+    curatedDockerImage: default
+    deploy_type: kubernetes
+    target:
+      region_id: ${BUILD_REGION_ID}
+      api_key: ${API_KEY}
+      resource_group: ${BUILD_RESOURCE_GROUP}
+      kubernetes_cluster: ${BUILD_CLUSTER_NAME}
+    script: |
+      #!/bin/bash
+      #set -x
+      tar xvzf private_keys_backup.tar.gz
+
+      echo "Checking cluster namespace $CLUSTER_NAMESPACE"
+      if ! kubectl get namespace "$CLUSTER_NAMESPACE"; then
+        kubectl create namespace "$CLUSTER_NAMESPACE"
+      fi
+
+      # Iterate on the signers for the $GUN 
+      for signer_and_key in $(cat dct_signers.json | jq -r -c '.[] | {name:.Name, key: .Keys[0].ID}'); do
+        DEVOPS_SIGNER=$(echo $signer_and_key | jq -r '.name')
+        DEVOPS_SIGNER_KEY=$(echo $signer_and_key | jq -r '.key')
+
+        echo "Creating K8S secret for build signed image for $DEVOPS_SIGNER using ${DEVOPS_SIGNER_KEY}.key"
+
+        export PEM_FILE_NAME="${DEVOPS_SIGNER_KEY}.key"
+        export PEM_FILE_CONTENT_BASE64=$(cat .docker/trust/private/$PEM_FILE_NAME | base64 -w0)
+
+        if [ -z "$PEM_FILE_CONTENT_BASE64" ]; then
+          echo "Not able to create DCT information for $GUN"
+        exit 1
+        else 
+          # ensure the secret is not already existing
+          kubectl delete secret "$REGISTRY_NAMESPACE.$IMAGE_NAME.$DEVOPS_SIGNER" \
+          -n$CLUSTER_NAMESPACE \
+          --ignore-not-found=true
+        fi
+
+        # Store the GUN to a specific secret
+        kubectl create secret generic "$REGISTRY_NAMESPACE.$IMAGE_NAME.$DEVOPS_SIGNER" \
+        -n$CLUSTER_NAMESPACE \
+        --from-literal=DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE="$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" \
+        --from-literal=DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE="$DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE" \
+        --from-literal=PEM_FILE_NAME="$PEM_FILE_NAME" \
+        --from-literal=PEM_FILE_CONTENT_BASE64="$PEM_FILE_CONTENT_BASE64"
+      done
+- name: Setup IKS Runtime enforcement in deployment cluster
+  inputs:
+  - type: job
+    stage: Create Signer
+    job: Create Signer Keys
+  triggers:
+  - type: stage
+  permission:
+    execute: TOOLCHAIN_ADMINS
+  properties:
+  - name: DEFAULT_HELM_VERSION
+    value: 2.13.1
+    type: text
+  - name: dct_properties
+    value: dct.properties
+    type: file
+  - name: CLUSTER_NAMESPACE
+    value: ${PROD_CLUSTER_NAMESPACE}
+    type: text
+  jobs:
+  - name: Create CISE CRD and Secret
+    type: deployer
+    curatedDockerImage: default
+    deploy_type: kubernetes
+    target:
+      region_id: ${PROD_REGION_ID}
+      api_key: ${API_KEY}
+      resource_group: ${PROD_RESOURCE_GROUP}
+      kubernetes_cluster: ${PROD_CLUSTER_NAME}
+    script: |
+      #!/bin/bash
+      #set -x
+
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/check_helm_up_and_running.sh")
+
+      # Install CISE
+      if helm list cise | grep '^cise'; then
+        echo "Container Image Security Enforcement is already installed"
+      else
+        helm repo add iks-charts https://icr.io/helm/iks-charts
+        helm install --name cise iks-charts/ibmcloud-image-enforcement
+      fi
+
+      # Define custom user policies
+      echo "Create CISE custom policies"
+      for signer_and_key in $(cat dct_signers.json | jq -r -c '.[] | {name:.Name, key: .Keys[0].ID}'); do
+        DEVOPS_SIGNER=$(echo $signer_and_key | jq -r '.name')
+        DEVOPS_SIGNER_PRIVATE_KEY=$(echo $signer_and_key | jq -r '.key')
+
+        source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/create_cise_crd.sh")
+        createCISE_CRD | tee cise_crd_custom_policy.yaml
+
+        echo " "
+        echo "Applying CISE custom policy to $CLUSTER_NAMESPACE"
+        kubectl apply -f cise_crd_custom_policy.yaml -n$CLUSTER_NAMESPACE
+
+        echo "Creating Secret $REGISTRY_NAMESPACE.$IMAGE_NAME.$DEVOPS_SIGNER to provide public key"
+        # ensure the secret is not already existing
+        kubectl delete secret "$REGISTRY_NAMESPACE.$IMAGE_NAME.$DEVOPS_SIGNER" -n$CLUSTER_NAMESPACE \
+          --ignore-not-found=true
+        kubectl create secret generic "$REGISTRY_NAMESPACE.$IMAGE_NAME.$DEVOPS_SIGNER" -n$CLUSTER_NAMESPACE \
+          --from-literal=name=$DEVOPS_SIGNER \
+          --from-file=publicKey=$DEVOPS_SIGNER.pub
+      done
