@@ -223,7 +223,8 @@ stages:
     stage: Create Validation Signer
     job: Create Validation Signer Keys
   triggers:
-  - type: manual
+  - type: stage
+    enabled: false
   properties:
   - name: DEFAULT_HELM_VERSION
     value: 2.13.1
