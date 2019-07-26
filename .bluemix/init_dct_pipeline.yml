@@ -1,5 +1,5 @@
 ---
-defaultBaseImageVersion: '2.0'
+defaultBaseImageVersion: latest
 properties:
 - name: IBMCLOUD_TARGET_REGION
   value: ${BUILD_REGION_ID}
@@ -79,6 +79,8 @@ stages:
   - type: job
     stage: Init Docker Content Trust
     job: Create DCT Keys
+  triggers:
+  - type: stage
   properties:
   - name: DEVOPS_SIGNER
     value: ${BUILD_SIGNER}
@@ -119,6 +121,8 @@ stages:
   - type: job
     stage: Create Build Signer
     job: Create Build Signer Keys
+  triggers:
+  - type: stage
   properties:
   - name: DEVOPS_SIGNER
     value: ${VALIDATION_SIGNER}
@@ -218,8 +222,8 @@ stages:
   - type: job
     stage: Create Validation Signer
     job: Create Validation Signer Keys
-  permission:
-    execute: TOOLCHAIN_ADMINS
+  triggers:
+  - type: manual
   properties:
   - name: DEFAULT_HELM_VERSION
     value: 2.13.1
