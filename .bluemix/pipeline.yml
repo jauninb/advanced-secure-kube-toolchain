@@ -258,6 +258,18 @@ stages:
   - name: buildprops
     value: build.properties
     type: file
+  - name: IBMCLOUD_TARGET_REGION
+    value: ${BUILD_REGION_ID}
+    type: text
+  - name: IBMCLOUD_TARGET_RESOURCE_GROUP
+    value: ${BUILD_RESOURCE_GROUP}
+    type: text
+  - name: BUILD_CLUSTER
+    value: ${BUILD_CLUSTER_NAME}
+    type: text
+  - name: BUILD_CLUSTER_NAMESPACE
+    value: ${BUILD_CLUSTER_NAMESPACE}
+    type: text
   - name: CLUSTER_NAMESPACE
     value: ${PROD_CLUSTER_NAMESPACE}
     type: text
@@ -268,6 +280,24 @@ stages:
     value: undefined
     type: text  
   jobs:
+  - name: Check Signatures
+    type: tester
+    test_type: customimage
+    docker_image: jauninb/pbi-docker:latest
+    script: |-
+      #!/bin/bash
+      # uncomment to debug the script
+      # set -x
+      # This script inspect the docker image signatures to ensure compliance
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_dind.sh")
+      # configure the container registry
+      REGISTRY_REGION=$(echo "$REGISTRY_REGION" | awk -F ':' '{print $NF;}')
+      ibmcloud cr region-set $REGISTRY_REGION
+      # login docker to ibm container registry
+      ibmcloud cr login
+      # configure DCT and inspect the image
+      export DOCKER_CONTENT_TRUST_SERVER=https://${REGISTRY_URL}:4443
+      docker trust inspect ${REGISTRY_URL}/${REGISTRY_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}
   - name: Deploy to Kubernetes
     type: deployer
     target:
