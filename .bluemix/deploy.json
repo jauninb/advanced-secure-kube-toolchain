@@ -387,8 +387,14 @@
         {
             "type": "text",
             "readonly": false,
-            "title": "DevOps Docker Image signer",
-            "key": "signer"
+            "title": "DevOps Docker Image Build signer",
+            "key": "build_signer"
+        },
+        {
+            "type": "text",
+            "readonly": false,
+            "title": "DevOps Docker Image Validation signer",
+            "key": "validation_signer"
         },
         {
             "type": "password",

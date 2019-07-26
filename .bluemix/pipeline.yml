@@ -102,7 +102,7 @@ stages:
     value: ${REGISTRY_NAMESPACE}
     type: text
   - name: DEVOPS_SIGNER
-    value: ${SIGNER}
+    value: ${BUILD_SIGNER}
     type: text
   - name: IMAGE_NAME
     value: ${APP_NAME}
@@ -189,6 +189,21 @@ stages:
   - name: buildprops
     value: build.properties
     type: file
+  - name: IBMCLOUD_TARGET_REGION
+    value: ${BUILD_REGION_ID}
+    type: text
+  - name: IBMCLOUD_TARGET_RESOURCE_GROUP
+    value: ${BUILD_RESOURCE_GROUP}
+    type: text
+  - name: BUILD_CLUSTER
+    value: ${BUILD_CLUSTER_NAME}
+    type: text
+  - name: BUILD_CLUSTER_NAMESPACE
+    value: ${BUILD_CLUSTER_NAMESPACE}
+    type: text
+  - name: DEVOPS_SIGNER
+    value: ${VALIDATION_SIGNER}
+    type: text
   jobs:
   - name: Check vulnerabilities
     type: tester
@@ -206,6 +221,32 @@ stages:
       # unset it in order to recompute using build.properties value
       unset PIPELINE_IMAGE_URL
       source <(curl -sSL "https://raw.githubusercontent.com/open-toolchain/commons/master/scripts/check_vulnerabilities.sh")
+  - name: Sign Image for Validation
+    type: tester
+    test_type: customimage
+    docker_image: jauninb/pbi-docker:latest
+    script: |-
+      #!/bin/bash
+      # uncomment to debug the script
+      # set -x
+      # Sign the built image as validated
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_dind.sh")
+      # configure the container registry
+      REGISTRY_REGION=$(echo "$REGISTRY_REGION" | awk -F ':' '{print $NF;}')
+      ibmcloud cr region-set $REGISTRY_REGION
+      # login docker to ibm container registry
+      ibmcloud cr login
+      # Initialize the REGISTRY_URL and DOCKER_CONTENT_TRUST_SERVER
+      export REGISTRY_URL=$(ibmcloud cr info | grep -m1 -i '^Container Registry' | awk '{print $3;}')
+      export DOCKER_CONTENT_TRUST_SERVER="https://$REGISTRY_URL:4443"
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/extract_dct_env.sh")
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_ci-dct_env.sh")
+      export DCT_DISABLED=false
+      # Pull the image
+      docker pull "$REGISTRY_URL/$REGISTRY_NAMESPACE/$IMAGE_NAME:$IMAGE_TAG"
+      # Sign the image
+      docker trust sign "$REGISTRY_URL/$REGISTRY_NAMESPACE/$IMAGE_NAME:$IMAGE_TAG"
+      docker trust inspect --pretty "$REGISTRY_URL/$REGISTRY_NAMESPACE/$IMAGE_NAME"
 - name: DEPLOY
   inputs:
   - type: job

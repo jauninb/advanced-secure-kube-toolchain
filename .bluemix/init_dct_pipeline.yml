@@ -74,20 +74,20 @@ stages:
       # Initialize the repository for Docker Content Trust
       echo "Doing Docker Content Trust initialization for GUN $REGISTRY_URL/$REGISTRY_NAMESPACE/$IMAGE_NAME"
       source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/notary_init_gun.sh")
-- name: Create Signer
+- name: Create Build Signer
   inputs:
   - type: job
     stage: Init Docker Content Trust
     job: Create DCT Keys
   properties:
   - name: DEVOPS_SIGNER
-    value: ${SIGNER}
+    value: ${BUILD_SIGNER}
     type: text
   - name: dct_properties
     value: dct.properties
     type: file
   jobs:
-  - name: Create Signer Keys
+  - name: Create Build Signer Keys
     type: builder
     curatedDockerImage: default
     artifact_dir: back-your-keys
@@ -114,11 +114,51 @@ stages:
 
       # Create the new signer key
       source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/create_dct_signer_key.sh")
-- name: Create K8S secret for image signing
+- name: Create Validation Signer
   inputs:
   - type: job
-    stage: Create Signer
-    job: Create Signer Keys
+    stage: Create Build Signer
+    job: Create Build Signer Keys
+  properties:
+  - name: DEVOPS_SIGNER
+    value: ${VALIDATION_SIGNER}
+    type: text
+  - name: dct_properties
+    value: dct.properties
+    type: file
+  jobs:
+  - name: Create Validation Signer Keys
+    type: builder
+    curatedDockerImage: default
+    artifact_dir: back-your-keys
+    build_type: customimage
+    docker_image: jauninb/pbi-docker:latest
+    script: |
+      #!/bin/bash
+      echo "Create signer $DEVOPS_SIGNER for $REGISTRY_URL/$REGISTRY_NAMESPACE/$IMAGE_NAME"
+
+      export IBMCLOUD_API_KEY=$IBM_CLOUD_API_KEY
+      export DOCKER_CONTENT_TRUST=1
+
+      # Setup Docker-In-Docker
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_dind.sh")
+
+      # configure the container registry
+      export REGISTRY_REGION=$(echo "$REGISTRY_REGION" | awk -F ':' '{print $NF;}')
+      ibmcloud cr region-set $REGISTRY_REGION
+      # login docker to ibm container registry
+      ibmcloud cr login
+
+      # Restore root and repository keys
+      tar xvzf private_keys_backup.tar.gz --directory ~
+
+      # Create the new signer key
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/create_dct_signer_key.sh")
+- name: Create K8S secrets for image signing
+  inputs:
+  - type: job
+    stage: Create Validation Signer
+    job: Create Validation Signer Keys
   triggers:
   - type: stage
   properties:
