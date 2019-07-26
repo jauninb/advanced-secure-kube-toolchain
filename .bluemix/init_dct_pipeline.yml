@@ -216,8 +216,8 @@ stages:
 - name: Setup IKS Runtime enforcement in deployment cluster
   inputs:
   - type: job
-    stage: Create Signer
-    job: Create Signer Keys
+    stage: Create Validation Signer
+    job: Create Validation Signer Keys
   permission:
     execute: TOOLCHAIN_ADMINS
   properties:
