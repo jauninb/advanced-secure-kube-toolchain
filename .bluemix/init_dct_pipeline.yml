@@ -16,6 +16,9 @@ properties:
 - name: IBM_CLOUD_API_KEY
   value: ${API_KEY}
   type: secure
+- name: VAULT_INSTANCE
+  value: ${VAULT_INSTANCE}
+  type: text
 stages:
 - name: Init Docker Content Trust
   properties:
@@ -38,7 +41,6 @@ stages:
   - name: Create DCT Keys
     type: builder
     curatedDockerImage: default
-    artifact_dir: back-your-keys
     build_type: customimage
     docker_image: jauninb/pbi-docker:latest
     script: |
@@ -74,6 +76,26 @@ stages:
       # Initialize the repository for Docker Content Trust
       echo "Doing Docker Content Trust initialization for GUN $REGISTRY_URL/$REGISTRY_NAMESPACE/$IMAGE_NAME"
       source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/notary_init_gun.sh")
+
+      #jsonify the Vault access values
+      source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
+      VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
+
+      #remove secrets. start new
+      deleteSecret "rootkey" "$VAULT_DATA"
+      deleteSecret "repokey" "$VAULT_DATA"
+      deleteSecret "builderkey" "$VAULT_DATA"
+      deleteSecret "validatorkey" "$VAULT_DATA"
+      deleteSecret "DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE" "$VAULT_DATA"
+      deleteSecret "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$VAULT_DATA"
+
+      #save the root, repo pem key files to the Vault
+      savePemFileByRoleToVault "root" "rootkey" "$VAULT_DATA"
+      savePemFileByRoleToVault "target" "repokey" "$VAULT_DATA"
+      #save the root and repo repository passphrases to the Vault
+      saveData "DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE" "$VAULT_DATA" "$DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE"
+      saveData "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$VAULT_DATA" "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE"
+     
 - name: Create Build Signer
   inputs:
   - type: job
@@ -92,7 +114,6 @@ stages:
   - name: Create Build Signer Keys
     type: builder
     curatedDockerImage: default
-    artifact_dir: back-your-keys
     build_type: customimage
     docker_image: jauninb/pbi-docker:latest
     script: |
@@ -111,11 +132,16 @@ stages:
       # login docker to ibm container registry
       ibmcloud cr login
 
-      # Restore root and repository keys
-      tar xvzf private_keys_backup.tar.gz --directory ~
-
+       # Restore  keys
+      source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
+      VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
+      #write repo pem file to trust/private
+      writeFile "$(readData "repokey" "$VAULT_DATA")"
+      export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(readData "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$VAULT_DATA")
       # Create the new signer key
       source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/create_dct_signer_key.sh")
+      #save the new signer pem key to the Vault
+      savePemFileByRoleToVault "$DEVOPS_SIGNER" "$DEVOPS_SIGNER" "$VAULT_DATA"
 - name: Create Validation Signer
   inputs:
   - type: job
@@ -134,7 +160,6 @@ stages:
   - name: Create Validation Signer Keys
     type: builder
     curatedDockerImage: default
-    artifact_dir: back-your-keys
     build_type: customimage
     docker_image: jauninb/pbi-docker:latest
     script: |
@@ -153,70 +178,17 @@ stages:
       # login docker to ibm container registry
       ibmcloud cr login
 
-      # Restore root and repository keys
-      tar xvzf private_keys_backup.tar.gz --directory ~
-
+      # Restore  keys
+      source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
+      VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
+      #write repo pem file to trust/private
+      writeFile "$(readData "repokey" "$VAULT_DATA")"
+      export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(readData "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$VAULT_DATA")
       # Create the new signer key
       source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/create_dct_signer_key.sh")
-- name: Create K8S secrets for image signing
-  inputs:
-  - type: job
-    stage: Create Validation Signer
-    job: Create Validation Signer Keys
-  triggers:
-  - type: stage
-  properties:
-  - name: dct_properties
-    value: dct.properties
-    type: file
-  jobs:
-  - name: Create Secret
-    type: deployer
-    curatedDockerImage: default
-    deploy_type: kubernetes
-    target:
-      region_id: ${BUILD_REGION_ID}
-      api_key: ${API_KEY}
-      resource_group: ${BUILD_RESOURCE_GROUP}
-      kubernetes_cluster: ${BUILD_CLUSTER_NAME}
-    script: |
-      #!/bin/bash
-      #set -x
-      tar xvzf private_keys_backup.tar.gz
-
-      echo "Checking cluster namespace $BUILD_CLUSTER_NAMESPACE"
-      if ! kubectl get namespace "$BUILD_CLUSTER_NAMESPACE"; then
-        kubectl create namespace "$BUILD_CLUSTER_NAMESPACE"
-      fi
-
-      # Iterate on the signers for the $GUN 
-      for signer_and_key in $(cat dct_signers.json | jq -r -c '.[] | {name:.Name, key: .Keys[0].ID}'); do
-        DEVOPS_SIGNER=$(echo $signer_and_key | jq -r '.name')
-        DEVOPS_SIGNER_KEY=$(echo $signer_and_key | jq -r '.key')
-
-        echo "Creating K8S secret for build signed image for $DEVOPS_SIGNER using ${DEVOPS_SIGNER_KEY}.key"
-
-        export PEM_FILE_NAME="${DEVOPS_SIGNER_KEY}.key"
-        export PEM_FILE_CONTENT_BASE64=$(cat .docker/trust/private/$PEM_FILE_NAME | base64 -w0)
-
-        if [ -z "$PEM_FILE_CONTENT_BASE64" ]; then
-          echo "Not able to create DCT information for $GUN"
-        exit 1
-        else 
-          # ensure the secret is not already existing
-          kubectl delete secret "$REGISTRY_NAMESPACE.$IMAGE_NAME.$DEVOPS_SIGNER" \
-          -n$BUILD_CLUSTER_NAMESPACE \
-          --ignore-not-found=true
-        fi
-
-        # Store the GUN to a specific secret
-        kubectl create secret generic "$REGISTRY_NAMESPACE.$IMAGE_NAME.$DEVOPS_SIGNER" \
-        -n$BUILD_CLUSTER_NAMESPACE \
-        --from-literal=DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE="$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" \
-        --from-literal=DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE="$DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE" \
-        --from-literal=PEM_FILE_NAME="$PEM_FILE_NAME" \
-        --from-literal=PEM_FILE_CONTENT_BASE64="$PEM_FILE_CONTENT_BASE64"
-      done
+      #Save the signer private key
+      savePemFileByRoleToVault "$DEVOPS_SIGNER" "$DEVOPS_SIGNER" "$VAULT_DATA"
+      
 - name: Setup IKS Runtime enforcement in deployment cluster
   inputs:
   - type: job
