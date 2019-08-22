@@ -85,6 +85,7 @@ stages:
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
 
         # remove secrets. start new
+        # workaround until key is prefixe with DCT GUN (namespace at least)
         deleteSecret "rootkey" "$VAULT_DATA"
         deleteSecret "repokey" "$VAULT_DATA"
         deleteSecret "builderkey" "$VAULT_DATA"
@@ -136,16 +137,27 @@ stages:
       # login docker to ibm container registry
       ibmcloud cr login
 
-       # Restore  keys
-      source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
-      VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
-      #write repo pem file to trust/private
-      writeFile "$(readData "repokey" "$VAULT_DATA")"
-      export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(readData "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$VAULT_DATA")
+      # Restore root and repository keys
+      if [ -z "$VAULT_INSTANCE" ]; then
+        echo "Restoring keys from input's private_keys_backup.tar.gz file"
+        tar xvzf private_keys_backup.tar.gz --directory ~
+      else
+        echo "Restoring keys from $VAULT_INSTANCE"
+        source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
+        VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
+        #write repo pem file to trust/private
+        writeFile "$(readData "repokey" "$VAULT_DATA")"
+        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(readData "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$VAULT_DATA")
+      fi
+
       # Create the new signer key
       source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/create_dct_signer_key.sh")
-      #save the new signer pem key to the Vault
-      savePemFileByRoleToVault "$DEVOPS_SIGNER" "$DEVOPS_SIGNER" "$VAULT_DATA"
+
+      if [ "$VAULT_INSTANCE" ]; then
+        # save the new signer pem key to the Vault
+        echo "Saving new signer key to $VAULT_INSTANCE"
+        savePemFileByRoleToVault "$DEVOPS_SIGNER" "$DEVOPS_SIGNER" "$VAULT_DATA"
+      fi
 - name: Create Validation Signer
   inputs:
   - type: job
@@ -184,16 +196,26 @@ stages:
       ibmcloud cr login
 
       # Restore  keys
-      source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
-      VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
-      #write repo pem file to trust/private
-      writeFile "$(readData "repokey" "$VAULT_DATA")"
-      export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(readData "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$VAULT_DATA")
+      if [ -z "$VAULT_INSTANCE" ]; then
+        echo "Restoring keys from input's private_keys_backup.tar.gz file"
+        tar xvzf private_keys_backup.tar.gz --directory ~
+      else
+        echo "Restoring keys from $VAULT_INSTANCE"
+        source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
+        VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
+        #write repo pem file to trust/private
+        writeFile "$(readData "repokey" "$VAULT_DATA")"
+        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(readData "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$VAULT_DATA")
+      fi
+
       # Create the new signer key
       source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/create_dct_signer_key.sh")
-      #Save the signer private key
-      savePemFileByRoleToVault "$DEVOPS_SIGNER" "$DEVOPS_SIGNER" "$VAULT_DATA"
-      
+
+      if [ "$VAULT_INSTANCE" ]; then
+        # save the new signer pem key to the Vault
+        echo "Saving new signer key to $VAULT_INSTANCE"
+        savePemFileByRoleToVault "$DEVOPS_SIGNER" "$DEVOPS_SIGNER" "$VAULT_DATA"
+      fi      
 - name: Setup IKS Runtime enforcement in deployment cluster
   inputs:
   - type: job
