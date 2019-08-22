@@ -4,6 +4,9 @@ properties:
 - name: IBM_CLOUD_API_KEY
   value: ${API_KEY}
   type: secure
+- name: VAULT_INSTANCE
+  value: ${VAULT_INSTANCE}
+  type: text
 stages:
 - name: BUILD
   inputs:
@@ -174,8 +177,14 @@ stages:
       # Initialize the REGISTRY_URL and DOCKER_CONTENT_TRUST_SERVER
       export REGISTRY_URL=$(ibmcloud cr info | grep -m1 -i '^Container Registry' | awk '{print $3;}')
       export DOCKER_CONTENT_TRUST_SERVER="https://$REGISTRY_URL:4443"
-      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/extract_dct_env.sh")
-      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_ci-dct_env.sh")
+
+      #Restore repository pem key and signer pem key
+      source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
+      VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
+      writeFile "$(readData "repokey" "$VAULT_DATA")"
+      writeFile "$(readData "$DEVOPS_SIGNER" "$VAULT_DATA")"
+      #retrieve the repository passphrase
+      export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(readData "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$VAULT_DATA")
       export DCT_DISABLED=false
       source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/build_image_dind.sh")
 - name: VALIDATE
@@ -239,8 +248,14 @@ stages:
       # Initialize the REGISTRY_URL and DOCKER_CONTENT_TRUST_SERVER
       export REGISTRY_URL=$(ibmcloud cr info | grep -m1 -i '^Container Registry' | awk '{print $3;}')
       export DOCKER_CONTENT_TRUST_SERVER="https://$REGISTRY_URL:4443"
-      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/extract_dct_env.sh")
-      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_ci-dct_env.sh")
+
+      #Restore repository pem key and signer pem key
+      source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
+      VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
+      writeFile "$(readData "repokey" "$VAULT_DATA")"
+      writeFile "$(readData "$DEVOPS_SIGNER" "$VAULT_DATA")"
+      #retrieve the repository passphrase
+      export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(readData "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$VAULT_DATA")
       export DCT_DISABLED=false
       # Pull the image
       docker pull "$REGISTRY_URL/$REGISTRY_NAMESPACE/$IMAGE_NAME:$IMAGE_TAG"

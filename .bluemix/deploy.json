@@ -387,6 +387,12 @@
         {
             "type": "text",
             "readonly": false,
+            "title": "Key Protect Vault Instance name",
+            "key": "vault_name"
+        },
+        {
+            "type": "text",
+            "readonly": false,
             "title": "DevOps Docker Image Build signer",
             "key": "build_signer"
         },
