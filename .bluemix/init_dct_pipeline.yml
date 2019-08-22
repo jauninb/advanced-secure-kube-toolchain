@@ -41,6 +41,7 @@ stages:
   - name: Create DCT Keys
     type: builder
     curatedDockerImage: default
+    artifact_dir: back-your-keys    
     build_type: customimage
     docker_image: jauninb/pbi-docker:latest
     script: |
@@ -77,25 +78,27 @@ stages:
       echo "Doing Docker Content Trust initialization for GUN $REGISTRY_URL/$REGISTRY_NAMESPACE/$IMAGE_NAME"
       source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/notary_init_gun.sh")
 
-      #jsonify the Vault access values
-      source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
-      VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
+      if [ "$VAULT_INSTANCE" ]; then
+        echo "Backing-up keys in $VAULT_INSTANCE"
+        # jsonify the Vault access values
+        source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
+        VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
 
-      #remove secrets. start new
-      deleteSecret "rootkey" "$VAULT_DATA"
-      deleteSecret "repokey" "$VAULT_DATA"
-      deleteSecret "builderkey" "$VAULT_DATA"
-      deleteSecret "validatorkey" "$VAULT_DATA"
-      deleteSecret "DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE" "$VAULT_DATA"
-      deleteSecret "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$VAULT_DATA"
+        # remove secrets. start new
+        deleteSecret "rootkey" "$VAULT_DATA"
+        deleteSecret "repokey" "$VAULT_DATA"
+        deleteSecret "builderkey" "$VAULT_DATA"
+        deleteSecret "validatorkey" "$VAULT_DATA"
+        deleteSecret "DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE" "$VAULT_DATA"
+        deleteSecret "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$VAULT_DATA"
 
-      #save the root, repo pem key files to the Vault
-      savePemFileByRoleToVault "root" "rootkey" "$VAULT_DATA"
-      savePemFileByRoleToVault "target" "repokey" "$VAULT_DATA"
-      #save the root and repo repository passphrases to the Vault
-      saveData "DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE" "$VAULT_DATA" "$DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE"
-      saveData "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$VAULT_DATA" "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE"
-     
+        # save the root, repo pem key files to the Vault
+        savePemFileByRoleToVault "root" "rootkey" "$VAULT_DATA"
+        savePemFileByRoleToVault "target" "repokey" "$VAULT_DATA"
+        # save the root and repo repository passphrases to the Vault
+        saveData "DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE" "$VAULT_DATA" "$DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE"
+        saveData "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$VAULT_DATA" "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE"
+      fi     
 - name: Create Build Signer
   inputs:
   - type: job
@@ -114,6 +117,7 @@ stages:
   - name: Create Build Signer Keys
     type: builder
     curatedDockerImage: default
+    artifact_dir: back-your-keys    
     build_type: customimage
     docker_image: jauninb/pbi-docker:latest
     script: |
@@ -160,6 +164,7 @@ stages:
   - name: Create Validation Signer Keys
     type: builder
     curatedDockerImage: default
+    artifact_dir: back-your-keys    
     build_type: customimage
     docker_image: jauninb/pbi-docker:latest
     script: |
