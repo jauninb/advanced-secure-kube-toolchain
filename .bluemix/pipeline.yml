@@ -12,7 +12,7 @@ stages:
   inputs:
   - type: git
     branch: master
-    service: ${GIT_REPO}    
+    service: ${GIT_REPO}
   triggers:
   - type: commit
   properties:
@@ -85,7 +85,7 @@ stages:
     type: text
   - name: DOCKER_FILE
     value: Dockerfile
-    type: text  
+    type: text
   - name: IBMCLOUD_TARGET_REGION
     value: ${BUILD_REGION_ID}
     type: text
@@ -180,7 +180,7 @@ stages:
 
       if [ -z "$VAULT_INSTANCE" ]; then
         echo "No Vault instance defined - using the K8S secrets to retrieve signing keys"
-        source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/extract_dct_env.sh")	
+        source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/extract_dct_env.sh")
         source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_ci-dct_env.sh")
       else
         echo "Vault instance $VAULT_INSTANCE used to retrieve signing keys"
@@ -259,7 +259,7 @@ stages:
 
       if [ -z "$VAULT_INSTANCE" ]; then
         echo "No Vault instance defined - using the K8S secrets to retrieve signing keys"
-        source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/extract_dct_env.sh")	
+        source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/extract_dct_env.sh")
         source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_ci-dct_env.sh")
       else
         echo "Vault instance $VAULT_INSTANCE used to retrieve signing keys"
@@ -270,7 +270,7 @@ stages:
         writeFile "$(readData "$DEVOPS_SIGNER" "$VAULT_DATA")"
         # retrieve the repository passphrase
         export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(readData "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$VAULT_DATA")
-      fi  
+      fi
 
       export DCT_DISABLED=false
       # Pull the image
@@ -315,7 +315,7 @@ stages:
     type: text
   - name: APP_URL
     value: undefined
-    type: text  
+    type: text
   jobs:
   - name: Check Signatures
     type: tester

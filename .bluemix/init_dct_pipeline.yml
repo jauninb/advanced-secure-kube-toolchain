@@ -41,7 +41,7 @@ stages:
   - name: Create DCT Keys
     type: builder
     curatedDockerImage: default
-    artifact_dir: back-your-keys    
+    artifact_dir: back-your-keys
     build_type: customimage
     docker_image: jauninb/pbi-docker:latest
     script: |
@@ -69,7 +69,7 @@ stages:
       echo "Check for $REGISTRY_NAMESPACE existence"
       if ibmcloud cr namespaces | tail --lines=+4 | head --lines=-2 | grep "^$REGISTRY_NAMESPACE"; then
         echo "$REGISTRY_NAMESPACE exists in $REGISTRY_URL"
-      else 
+      else
         echo "Creating REGISTRY_NAMESPACE in $REGISTRY_URL"
         ibmcloud cr namespace-add $REGISTRY_NAMESPACE
       fi
@@ -99,7 +99,7 @@ stages:
         # save the root and repo repository passphrases to the Vault
         saveData "DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE" "$VAULT_DATA" "$DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE"
         saveData "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$VAULT_DATA" "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE"
-      fi     
+      fi
 - name: Create Build Signer
   inputs:
   - type: job
@@ -118,7 +118,7 @@ stages:
   - name: Create Build Signer Keys
     type: builder
     curatedDockerImage: default
-    artifact_dir: back-your-keys    
+    artifact_dir: back-your-keys
     build_type: customimage
     docker_image: jauninb/pbi-docker:latest
     script: |
@@ -176,7 +176,7 @@ stages:
   - name: Create Validation Signer Keys
     type: builder
     curatedDockerImage: default
-    artifact_dir: back-your-keys    
+    artifact_dir: back-your-keys
     build_type: customimage
     docker_image: jauninb/pbi-docker:latest
     script: |
@@ -219,57 +219,57 @@ stages:
 - name: Create K8S secrets for image signing (optional)
   inputs:
   - type: job
-    stage: Create Validation Signer 
-    job: Create Validation Signer Keys  
-  triggers: 
-  - type: stage 
-  properties:   
-  - name: dct_properties    
-    value: dct.properties   
-    type: file  
-  jobs: 
+    stage: Create Validation Signer
+    job: Create Validation Signer Keys
+  triggers:
+  - type: stage
+  properties:
+  - name: dct_properties
+    value: dct.properties
+    type: file
+  jobs:
   - name: Create Secrets
-    type: deployer  
-    curatedDockerImage: default 
-    deploy_type: kubernetes 
-    target: 
-      region_id: ${BUILD_REGION_ID} 
-      api_key: ${API_KEY}   
-      resource_group: ${BUILD_RESOURCE_GROUP}   
-      kubernetes_cluster: ${BUILD_CLUSTER_NAME} 
-    script: |   
-      #!/bin/bash   
-      #set -x   
+    type: deployer
+    curatedDockerImage: default
+    deploy_type: kubernetes
+    target:
+      region_id: ${BUILD_REGION_ID}
+      api_key: ${API_KEY}
+      resource_group: ${BUILD_RESOURCE_GROUP}
+      kubernetes_cluster: ${BUILD_CLUSTER_NAME}
+    script: |
+      #!/bin/bash
+      #set -x
       if [ -z "$VAULT_INSTANCE" ]; then
         echo "Creating K8S secrets containing signing information in $BUILD_CLUSTER_NAMESPACE"
-        tar xvzf private_keys_backup.tar.gz 
-        echo "Checking cluster namespace $BUILD_CLUSTER_NAMESPACE"  
-        if ! kubectl get namespace "$BUILD_CLUSTER_NAMESPACE"; then 
-          kubectl create namespace "$BUILD_CLUSTER_NAMESPACE"   
-        fi  
-        # Iterate on the signers for the $GUN   
-        for signer_and_key in $(cat dct_signers.json | jq -r -c '.[] | {name:.Name, key: .Keys[0].ID}'); do 
-          DEVOPS_SIGNER=$(echo $signer_and_key | jq -r '.name') 
-          DEVOPS_SIGNER_KEY=$(echo $signer_and_key | jq -r '.key')  
-          echo "Creating K8S secret for build signed image for $DEVOPS_SIGNER using ${DEVOPS_SIGNER_KEY}.key"   
-          export PEM_FILE_NAME="${DEVOPS_SIGNER_KEY}.key"   
-          export PEM_FILE_CONTENT_BASE64=$(cat .docker/trust/private/$PEM_FILE_NAME | base64 -w0)   
-          if [ -z "$PEM_FILE_CONTENT_BASE64" ]; then    
-            echo "Not able to create DCT information for $GUN"  
-            exit 1  
-          else  
-            # ensure the secret is not already existing 
-            kubectl delete secret "$REGISTRY_NAMESPACE.$IMAGE_NAME.$DEVOPS_SIGNER" \    
-            -n$BUILD_CLUSTER_NAMESPACE \    
-            --ignore-not-found=true 
-          fi    
-          # Store the GUN to a specific secret  
-          kubectl create secret generic "$REGISTRY_NAMESPACE.$IMAGE_NAME.$DEVOPS_SIGNER" \  
-          -n$BUILD_CLUSTER_NAMESPACE \  
-          --from-literal=DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE="$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" \ 
-          --from-literal=DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE="$DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE" \ 
-          --from-literal=PEM_FILE_NAME="$PEM_FILE_NAME" \   
-          --from-literal=PEM_FILE_CONTENT_BASE64="$PEM_FILE_CONTENT_BASE64" 
+        tar xvzf private_keys_backup.tar.gz
+        echo "Checking cluster namespace $BUILD_CLUSTER_NAMESPACE"
+        if ! kubectl get namespace "$BUILD_CLUSTER_NAMESPACE"; then
+          kubectl create namespace "$BUILD_CLUSTER_NAMESPACE"
+        fi
+        # Iterate on the signers for the $GUN
+        for signer_and_key in $(cat dct_signers.json | jq -r -c '.[] | {name:.Name, key: .Keys[0].ID}'); do
+          DEVOPS_SIGNER=$(echo $signer_and_key | jq -r '.name')
+          DEVOPS_SIGNER_KEY=$(echo $signer_and_key | jq -r '.key')
+          echo "Creating K8S secret for build signed image for $DEVOPS_SIGNER using ${DEVOPS_SIGNER_KEY}.key"
+          export PEM_FILE_NAME="${DEVOPS_SIGNER_KEY}.key"
+          export PEM_FILE_CONTENT_BASE64=$(cat .docker/trust/private/$PEM_FILE_NAME | base64 -w0)
+          if [ -z "$PEM_FILE_CONTENT_BASE64" ]; then
+            echo "Not able to create DCT information for $GUN"
+            exit 1
+          else
+            # ensure the secret is not already existing
+            kubectl delete secret "$REGISTRY_NAMESPACE.$IMAGE_NAME.$DEVOPS_SIGNER" \
+            -n$BUILD_CLUSTER_NAMESPACE \
+            --ignore-not-found=true
+          fi
+          # Store the GUN to a specific secret
+          kubectl create secret generic "$REGISTRY_NAMESPACE.$IMAGE_NAME.$DEVOPS_SIGNER" \
+          -n$BUILD_CLUSTER_NAMESPACE \
+          --from-literal=DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE="$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" \
+          --from-literal=DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE="$DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE" \
+          --from-literal=PEM_FILE_NAME="$PEM_FILE_NAME" \
+          --from-literal=PEM_FILE_CONTENT_BASE64="$PEM_FILE_CONTENT_BASE64"
         done
       else
         echo "No-op - Vault instance $VAULT_INSTANCE contains signing keys"
