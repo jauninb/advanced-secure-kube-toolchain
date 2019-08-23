@@ -215,8 +215,8 @@ stages:
         # save the new signer pem key to the Vault
         echo "Saving new signer key to $VAULT_INSTANCE"
         savePemFileByRoleToVault "$DEVOPS_SIGNER" "$DEVOPS_SIGNER" "$VAULT_DATA"
-      fi      
-- name: Create K8S secrets for image signing (optional)
+      fi
+- name: Create K8S secrets for image signing optional
   inputs:
   - type: job
     stage: Create Validation Signer	
@@ -228,7 +228,7 @@ stages:
     value: dct.properties	
     type: file	
   jobs:	
-  - name: Create Secret	
+  - name: Create Secrets
     type: deployer	
     curatedDockerImage: default	
     deploy_type: kubernetes	
