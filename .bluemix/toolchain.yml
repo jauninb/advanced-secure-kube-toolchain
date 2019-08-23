@@ -101,7 +101,7 @@ form:
       app-name: '{{services.repo.parameters.repo_name}}'
       prod-cluster-namespace: prod
       build-cluster-namespace: build
-      vault_name: 
+      vault_name: ''
       build_signer: 'devops-build'
       validation_signer: 'devops-validation'
       docker_content_trust_root_passphrase:
