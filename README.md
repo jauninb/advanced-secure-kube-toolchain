@@ -17,7 +17,7 @@ Keys used for signing Docker images are stored securely in a Key protect service
 ![Icon](./.bluemix/toolchain.png)
 
 ### To get started, click this button:
-[![Create toolchain](https://cloud.ibm.com/devops/graphics/create_toolchain_button.png)](https://cloud.ibm.com/devops/setup/deploy?repository=https%3A%2F%2Fgithub.com%2Fjauninb%2Fsecure-kube-toolchain&env_id=ibm:yp:us-south)
+[![Create toolchain](https://cloud.ibm.com/devops/graphics/create_toolchain_button.png)](https://cloud.ibm.com/devops/setup/deploy?repository=https%3A%2F%2Fgithub.com%2Fjauninb%2Fadvanced-secure-kube-toolchain&env_id=ibm:yp:us-south)
 ---
 ### Learn more 
 
