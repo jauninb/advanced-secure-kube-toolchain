@@ -21,7 +21,7 @@ Keys used for signing Docker images are stored securely in a Key protect service
 
 #### Current limitations (to be removed in the next version):
 - Key Protect service instance can not have space/blank in its name
-- Key Protect service instance can not be used for multiple instances of this toolchain
+- The same Key Protect service instance can not be used for multiple instances of this toolchain
 
 ---
 ### Learn more 
