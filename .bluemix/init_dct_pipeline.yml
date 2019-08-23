@@ -316,6 +316,12 @@ stages:
         helm install --name cise iks-charts/ibmcloud-image-enforcement
       fi
 
+      # Ensure deployment namespace is created
+      echo "Checking cluster namespace $CLUSTER_NAMESPACE"
+      if ! kubectl get namespace "$CLUSTER_NAMESPACE"; then
+        kubectl create namespace "$CLUSTER_NAMESPACE"
+      fi
+
       # Define custom user policies
       echo "Create CISE custom policies"
       for signer_and_key in $(cat dct_signers.json | jq -r -c '.[] | {name:.Name, key: .Keys[0].ID}'); do
