@@ -86,21 +86,12 @@ stages:
         source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
 
-        # remove secrets. start new
-        # workaround until key is prefixe with DCT GUN (namespace at least)
-        deleteSecret "rootkey" "$VAULT_DATA"
-        deleteSecret "repokey" "$VAULT_DATA"
-        deleteSecret "builderkey" "$VAULT_DATA"
-        deleteSecret "validatorkey" "$VAULT_DATA"
-        deleteSecret "DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE" "$VAULT_DATA"
-        deleteSecret "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$VAULT_DATA"
-
         # save the root, repo pem key files to the Vault
-        savePemFileByRoleToVault "root" "rootkey" "$VAULT_DATA"
-        savePemFileByRoleToVault "target" "repokey" "$VAULT_DATA"
+        savePemFileByRoleToVault "root" "$REGISTRY_NAMESPACE.$IMAGE_NAME.rootkey" "$VAULT_DATA"
+        savePemFileByRoleToVault "target" "$REGISTRY_NAMESPACE.$IMAGE_NAME.repokey" "$VAULT_DATA"
         # save the root and repo repository passphrases to the Vault
-        saveData "DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE" "$VAULT_DATA" "$DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE"
-        saveData "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$VAULT_DATA" "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE"
+        saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.DCT_ROOT_PASSPHRASE" "$VAULT_DATA" "$DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE"
+        saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.DCT_REPOSITORY_PASSPHRASE" "$VAULT_DATA" "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE"
       fi
 - name: Create Build Signer
   inputs:
@@ -148,8 +139,8 @@ stages:
         source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
         #write repo pem file to trust/private
-        writeFile "$(readData "repokey" "$VAULT_DATA")"
-        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(readData "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$VAULT_DATA")
+        writeFile "$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.repokey" "$VAULT_DATA")"
+        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.DCT_REPOSITORY_PASSPHRASE" "$VAULT_DATA")
       fi
 
       # Create the new signer key
@@ -158,7 +149,7 @@ stages:
       if [ "$VAULT_INSTANCE" ]; then
         # save the new signer pem key to the Vault
         echo "Saving new signer key to $VAULT_INSTANCE"
-        savePemFileByRoleToVault "$DEVOPS_SIGNER" "$DEVOPS_SIGNER" "$VAULT_DATA"
+        savePemFileByRoleToVault "$DEVOPS_SIGNER" "$REGISTRY_NAMESPACE.$IMAGE_NAME.$DEVOPS_SIGNER" "$VAULT_DATA"
       fi
 - name: Create Validation Signer
   inputs:
@@ -206,8 +197,8 @@ stages:
         source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
         #write repo pem file to trust/private
-        writeFile "$(readData "repokey" "$VAULT_DATA")"
-        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(readData "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$VAULT_DATA")
+        writeFile "$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.repokey" "$VAULT_DATA")"
+        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.DCT_REPOSITORY_PASSPHRASE" "$VAULT_DATA")
       fi
 
       # Create the new signer key
@@ -216,7 +207,7 @@ stages:
       if [ "$VAULT_INSTANCE" ]; then
         # save the new signer pem key to the Vault
         echo "Saving new signer key to $VAULT_INSTANCE"
-        savePemFileByRoleToVault "$DEVOPS_SIGNER" "$DEVOPS_SIGNER" "$VAULT_DATA"
+        savePemFileByRoleToVault "$DEVOPS_SIGNER" "$REGISTRY_NAMESPACE.$IMAGE_NAME.$DEVOPS_SIGNER" "$VAULT_DATA"
       fi
 - name: Create K8S secrets for image signing (optional)
   inputs:
