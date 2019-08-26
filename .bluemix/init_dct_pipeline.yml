@@ -31,12 +31,6 @@ stages:
   - name: IMAGE_NAME
     value: ${APP_NAME}
     type: text
-  - name: DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE
-    value: ${DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE}
-    type: secure
-  - name: DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE
-    value: ${DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE}
-    type: secure
   jobs:
   - name: Create DCT Keys
     type: builder
@@ -75,6 +69,14 @@ stages:
       fi
 
       # Initialize the repository for Docker Content Trust
+      # Generate passphrase for root and repository keys
+      # see https://docs.docker.com/engine/security/trust/trust_key_mng/#choose-a-passphrase
+      if [ -z "$DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE" ]; then
+        export DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE=$(openssl rand -base64 16)
+      fi
+      if [ -z "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" ]; then
+        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(openssl rand -base64 16)
+      fi
       echo "Doing Docker Content Trust initialization for GUN $REGISTRY_URL/$REGISTRY_NAMESPACE/$IMAGE_NAME"
       source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/notary_init_gun.sh")
 

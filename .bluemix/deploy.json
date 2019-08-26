@@ -152,14 +152,6 @@
             "description": "Name of the image signer (signing key-pair's name)",
             "type": "string",
             "pattern": "\\S"
-        },
-        "docker_content_trust_root_passphrase": {
-            "description": "Passphrase for the root key",
-            "type": "string"
-        },
-        "docker_content_trust_repository_passphrase": {
-            "description": "Passphrase for the repository key",
-            "type": "string"
         }
     },
     "required": [
@@ -401,18 +393,6 @@
             "readonly": false,
             "title": "DevOps Docker Image Validation signer",
             "key": "validation_signer"
-        },
-        {
-            "type": "password",
-            "readonly": false,
-            "title": "DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE",
-            "key": "docker_content_trust_root_passphrase"
-        },
-        {
-            "type": "password",
-            "readonly": false,
-            "title": "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE",
-            "key": "docker_content_trust_repository_passphrase"
         },
         {
             "type": "table",

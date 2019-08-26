@@ -86,8 +86,6 @@ services:
           VAULT_INSTANCE: '{{form.pipeline.parameters.vault_name}}'
           BUILD_SIGNER: '{{form.pipeline.parameters.build_signer}}'
           VALIDATION_SIGNER: '{{form.pipeline.parameters.validation_signer}}'
-          DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE: '{{form.pipeline.parameters.docker_content_trust_root_passphrase}}'
-          DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE: '{{form.pipeline.parameters.docker_content_trust_repository_passphrase}}'
           PROD_REGION_ID: '{{form.pipeline.parameters.prod-region}}'
           PROD_RESOURCE_GROUP: '{{form.pipeline.parameters.prod-resource-group}}'
           PROD_CLUSTER_NAME: '{{form.pipeline.parameters.prod-cluster-name}}'
@@ -104,7 +102,5 @@ form:
       vault_name: ''
       build_signer: 'devops-build'
       validation_signer: 'devops-validation'
-      docker_content_trust_root_passphrase:
-      docker_content_trust_repository_passphrase:
     schema:
       $ref: deploy.json
