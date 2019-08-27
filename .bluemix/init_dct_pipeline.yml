@@ -50,7 +50,7 @@ stages:
       export DOCKER_CONTENT_TRUST=1
 
       # Setup Docker-In-Docker
-      source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/master/setup_dind.sh")
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_dind.sh")
 
       # configure the container registry
       export REGISTRY_REGION=$(echo "$REGISTRY_REGION" | awk -F ':' '{print $NF;}')
@@ -78,12 +78,12 @@ stages:
         export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(openssl rand -base64 16)
       fi
       echo "Doing Docker Content Trust initialization for GUN $REGISTRY_URL/$REGISTRY_NAMESPACE/$IMAGE_NAME"
-      source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/master/notary_init_gun.sh")
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/notary_init_gun.sh")
 
       if [ "$VAULT_INSTANCE" ]; then
         echo "Backing-up keys in $VAULT_INSTANCE"
         # jsonify the Vault access values
-        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/master/signatures.sh")
+        source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
 
         #save the root, repo pem key files to the Vault
@@ -123,7 +123,7 @@ stages:
       export DOCKER_CONTENT_TRUST=1
 
       # Setup Docker-In-Docker
-      source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/master/setup_dind.sh")
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_dind.sh")
 
       # configure the container registry
       export REGISTRY_REGION=$(echo "$REGISTRY_REGION" | awk -F ':' '{print $NF;}')
@@ -137,7 +137,7 @@ stages:
         tar xvzf private_keys_backup.tar.gz --directory ~
       else
         echo "Restoring keys from $VAULT_INSTANCE"
-        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/master/signatures.sh")
+        source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
         #write repo pem file to trust/private
 
@@ -148,7 +148,7 @@ stages:
       fi
 
       # Create the new signer key
-      source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/master/create_dct_signer_key.sh")
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/create_dct_signer_key.sh")
 
       if [ "$VAULT_INSTANCE" ]; then
         # save the new signer pem key to the Vault
@@ -186,7 +186,7 @@ stages:
       export DOCKER_CONTENT_TRUST=1
 
       # Setup Docker-In-Docker
-      source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/master/setup_dind.sh")
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_dind.sh")
 
       # configure the container registry
       export REGISTRY_REGION=$(echo "$REGISTRY_REGION" | awk -F ':' '{print $NF;}')
@@ -200,7 +200,7 @@ stages:
         tar xvzf private_keys_backup.tar.gz --directory ~
       else
         echo "Restoring keys from $VAULT_INSTANCE"
-        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/master/signatures.sh")
+        source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
         #write repo pem file to trust/private
         JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
@@ -210,7 +210,7 @@ stages:
       fi
 
       # Create the new signer key
-      source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/master/create_dct_signer_key.sh")
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/create_dct_signer_key.sh")
 
       if [ "$VAULT_INSTANCE" ]; then
         # save the new signer pem key to the Vault
@@ -310,7 +310,7 @@ stages:
       #!/bin/bash
       #set -x
 
-      source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/master/check_helm_up_and_running.sh")
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/check_helm_up_and_running.sh")
 
       # Install CISE
       if helm list cise | grep '^cise'; then
@@ -332,7 +332,7 @@ stages:
         DEVOPS_SIGNER=$(echo $signer_and_key | jq -r '.name')
         DEVOPS_SIGNER_PRIVATE_KEY=$(echo $signer_and_key | jq -r '.key')
 
-        source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/master/create_cise_crd.sh")
+        source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/create_cise_crd.sh")
         createCISE_CRD | tee cise_crd_custom_policy.yaml
 
         echo " "

@@ -168,7 +168,7 @@ stages:
     docker_image: jauninb/pbi-docker:latest
     script: |
       #!/bin/bash
-      source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/master/setup_dind.sh")
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_dind.sh")
       # configure the container registry
       REGISTRY_REGION=$(echo "$REGISTRY_REGION" | awk -F ':' '{print $NF;}')
       ibmcloud cr region-set $REGISTRY_REGION
@@ -180,11 +180,11 @@ stages:
 
       if [ -z "$VAULT_INSTANCE" ]; then
         echo "No Vault instance defined - using the K8S secrets to retrieve signing keys"
-        source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/master/extract_dct_env.sh")
-        source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/master/setup_ci-dct_env.sh")
+        source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/extract_dct_env.sh")
+        source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_ci-dct_env.sh")
       else
         echo "Vault instance $VAULT_INSTANCE used to retrieve signing keys"
-        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/master/signatures.sh")
+        source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
         # Restore repository pem key and signer pem key
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
         JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
@@ -195,7 +195,7 @@ stages:
       fi
 
       export DCT_DISABLED=false
-      source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/master/build_image_dind.sh")
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/build_image_dind.sh")
 - name: VALIDATE
   inputs:
   - type: job
@@ -248,7 +248,7 @@ stages:
       # uncomment to debug the script
       # set -x
       # Sign the built image as validated
-      source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/master/setup_dind.sh")
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_dind.sh")
       # configure the container registry
       REGISTRY_REGION=$(echo "$REGISTRY_REGION" | awk -F ':' '{print $NF;}')
       ibmcloud cr region-set $REGISTRY_REGION
@@ -260,11 +260,11 @@ stages:
 
       if [ -z "$VAULT_INSTANCE" ]; then
         echo "No Vault instance defined - using the K8S secrets to retrieve signing keys"
-        source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/master/extract_dct_env.sh")
-        source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/master/setup_ci-dct_env.sh")
+        source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/extract_dct_env.sh")
+        source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_ci-dct_env.sh")
       else
         echo "Vault instance $VAULT_INSTANCE used to retrieve signing keys"
-        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/master/signatures.sh")
+        source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
         # Restore repository pem key and signer pem key
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
         JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
@@ -328,7 +328,7 @@ stages:
       # uncomment to debug the script
       # set -x
       # This script inspect the docker image signatures to ensure compliance
-      source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/master/setup_dind.sh")
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_dind.sh")
       # configure the container registry
       REGISTRY_REGION=$(echo "$REGISTRY_REGION" | awk -F ':' '{print $NF;}')
       ibmcloud cr region-set $REGISTRY_REGION
