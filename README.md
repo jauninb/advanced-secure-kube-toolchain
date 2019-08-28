@@ -19,8 +19,11 @@ Keys used for signing Docker images are stored securely in a Key protect service
 ### To get started, click this button:
 [![Create toolchain](https://cloud.ibm.com/devops/graphics/create_toolchain_button.png)](https://cloud.ibm.com/devops/setup/deploy?repository=https%3A%2F%2Fgithub.com%2Fjauninb%2Fadvanced-secure-kube-toolchain&env_id=ibm:yp:us-south)
 
-#### Current limitations (to be removed in the next version):
+#### Known limitations (to be fixed in future versions):
 - Key Protect service instance can not have space/blank in its name
+- Key ID/alias name in Key Protect should not have name longer than 50 char - https://cloud.ibm.com/apidocs/key-protect#create-a-new-key
+- Initialization of DCT for a namespace perform both the root key and repository initialization, this needs to
+  be revisited to simplify multiple images signing in the same namespace
 
 ---
 ### Learn more 
