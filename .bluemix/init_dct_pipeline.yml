@@ -86,12 +86,13 @@ stages:
         source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
 
-        # save the root, repo pem key files to the Vault
-        savePemFileByRoleToVault "root" "$REGISTRY_NAMESPACE.rootkey" "$VAULT_DATA"
-        savePemFileByRoleToVault "target" "$REGISTRY_NAMESPACE.$IMAGE_NAME.repokey" "$VAULT_DATA"
-        # save the root and repo repository passphrases to the Vault
-        saveData "$REGISTRY_NAMESPACE.DCT_ROOT_PASSPHRASE" "$VAULT_DATA" "$DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE"
-        saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.DCT_REPOSITORY_PASSPHRASE" "$VAULT_DATA" "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE"
+        #save the root, repo pem key files to the Vault
+        JSON_ROOT_DATA=$(addTrustFileToJSON "root" "$JSON_ROOT_DATA")
+        JSON_ROOT_DATA=$(addJSONEntry "$JSON_ROOT_DATA" "DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE" "$DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE")
+        JSON_DATA=$(addTrustFileToJSON "target" "$JSON_DATA")
+        JSON_DATA=$(addJSONEntry "$JSON_DATA" "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE")
+        saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.rootkey" "$VAULT_DATA" "$JSON_ROOT_DATA"
+        saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA" "$JSON_DATA"
       fi
 - name: Create Build Signer
   inputs:
@@ -130,7 +131,7 @@ stages:
       # login docker to ibm container registry
       ibmcloud cr login
 
-      # Restore root and repository keys
+      # Restore root & repository keys
       if [ -z "$VAULT_INSTANCE" ]; then
         echo "Restoring keys from input's private_keys_backup.tar.gz file"
         tar xvzf private_keys_backup.tar.gz --directory ~
@@ -138,9 +139,11 @@ stages:
         echo "Restoring keys from $VAULT_INSTANCE"
         source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
-        #write repo pem file to trust/private
-        writeFile "$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.repokey" "$VAULT_DATA")"
-        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.DCT_REPOSITORY_PASSPHRASE" "$VAULT_DATA")
+        #write repo pem file to trust/private. Only repo key required to add delegate
+        JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
+        repokey=$(getJSONValue "target" "$JSON_DATA")
+        writeFile "$repokey"
+        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(getJSONValue "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$JSON_DATA")
       fi
 
       # Create the new signer key
@@ -149,7 +152,9 @@ stages:
       if [ "$VAULT_INSTANCE" ]; then
         # save the new signer pem key to the Vault
         echo "Saving new signer key to $VAULT_INSTANCE"
-        savePemFileByRoleToVault "$DEVOPS_SIGNER" "$REGISTRY_NAMESPACE.$IMAGE_NAME.$DEVOPS_SIGNER" "$VAULT_DATA"
+        JSON_DATA=$(addTrustFileToJSON "$DEVOPS_SIGNER" "$JSON_DATA")
+        deleteSecret "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA"
+        saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA" "$JSON_DATA"
       fi
 - name: Create Validation Signer
   inputs:
@@ -197,8 +202,10 @@ stages:
         source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
         #write repo pem file to trust/private
-        writeFile "$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.repokey" "$VAULT_DATA")"
-        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.DCT_REPOSITORY_PASSPHRASE" "$VAULT_DATA")
+        JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
+        repokey=$(getJSONValue "target" "$JSON_DATA")
+        writeFile "$repokey"
+        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(getJSONValue "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$JSON_DATA")
       fi
 
       # Create the new signer key
@@ -207,7 +214,10 @@ stages:
       if [ "$VAULT_INSTANCE" ]; then
         # save the new signer pem key to the Vault
         echo "Saving new signer key to $VAULT_INSTANCE"
-        savePemFileByRoleToVault "$DEVOPS_SIGNER" "$REGISTRY_NAMESPACE.$IMAGE_NAME.$DEVOPS_SIGNER" "$VAULT_DATA"
+        #save the new signer pem key to the Vault
+        JSON_DATA=$(addTrustFileToJSON "$DEVOPS_SIGNER" "$JSON_DATA")
+        deleteSecret "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA"
+        saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA" "$JSON_DATA"
       fi
 - name: Create K8S secrets for image signing (optional)
   inputs:
