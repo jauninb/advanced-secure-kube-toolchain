@@ -23,7 +23,7 @@ Keys used for signing Docker images are stored securely in a Key protect service
 - Key Protect service instance can not have space/blank in its name
 - Key ID/alias name in Key Protect should not have name longer than 50 char - https://cloud.ibm.com/apidocs/key-protect#create-a-new-key
 - Initialization of DCT for a namespace perform both the root key and repository initialization, this needs to
-  be revisited to simplify multiple images signing in the same namespace
+  be revisited to simplify multiple images signing in the same namespace (and also to possibly reuse pem/pub keys inside namespace for different images signing)
 
 ---
 ### Learn more 
