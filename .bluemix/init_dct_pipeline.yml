@@ -87,10 +87,10 @@ stages:
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
 
         # save the root, repo pem key files to the Vault
-        savePemFileByRoleToVault "root" "$REGISTRY_NAMESPACE.rootkey" "$VAULT_DATA"
+        savePemFileByRoleToVault "root" "$REGISTRY_NAMESPACE.$IMAGE_NAME.rootkey" "$VAULT_DATA"
         savePemFileByRoleToVault "target" "$REGISTRY_NAMESPACE.$IMAGE_NAME.repokey" "$VAULT_DATA"
         # save the root and repo repository passphrases to the Vault
-        saveData "$REGISTRY_NAMESPACE.DCT_ROOT_PASSPHRASE" "$VAULT_DATA" "$DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE"
+        saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.DCT_ROOT_PASSPHRASE" "$VAULT_DATA" "$DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE"
         saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.DCT_REPOSITORY_PASSPHRASE" "$VAULT_DATA" "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE"
       fi
 - name: Create Build Signer
