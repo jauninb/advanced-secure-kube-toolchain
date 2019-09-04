@@ -20,6 +20,138 @@ properties:
   value: ${VAULT_INSTANCE}
   type: text
 stages:
+- name: Create Signer Keys
+  triggers:
+  - type: stage
+    enabled: false
+  properties:
+  - name: REGISTRY_REGION
+    value: ${REGISTRY_REGION_ID}
+    type: text
+  - name: REGISTRY_NAMESPACE
+    value: ${REGISTRY_NAMESPACE}
+    type: text
+  - name: IMAGE_NAME
+    value: ${APP_NAME}
+    type: text
+  - name: DEVOPS_BUILD_SIGNER
+    value: ${BUILD_SIGNER}
+    type: text
+  - name: DEVOPS_VALIDATION_SIGNER
+    value: ${VALIDATION_SIGNER}
+    type: text
+  jobs:
+  - name: Create Build Signer Keys
+    type: builder
+    curatedDockerImage: default
+    artifact_dir: back-your-keys
+    build_type: customimage
+    docker_image: jauninb/pbi-docker:latest
+    script: |
+      #!/bin/bash
+      echo "Create signer $DEVOPS_SIGNER for $REGISTRY_URL/$REGISTRY_NAMESPACE/$IMAGE_NAME"
+      DEVOPS_SIGNER="$DEVOPS_BUILD_SIGNER"
+      export IBMCLOUD_API_KEY=$IBM_CLOUD_API_KEY
+      export DOCKER_CONTENT_TRUST=1
+
+      # Setup Docker-In-Docker
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_dind.sh")
+
+      # configure the container registry
+      export REGISTRY_REGION=$(echo "$REGISTRY_REGION" | awk -F ':' '{print $NF;}')
+      ibmcloud cr region-set $REGISTRY_REGION
+      # login docker to ibm container registry
+      ibmcloud cr login
+      if [ -z "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" ]; then
+        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(openssl rand -base64 16)
+      fi
+      # Restore root & repository keys
+      if [ -z "$VAULT_INSTANCE" ]; then
+        echo "Restoring keys from input's private_keys_backup.tar.gz file"
+        tar xvzf private_keys_backup.tar.gz --directory ~
+      else
+        echo "Restoring keys from $VAULT_INSTANCE"
+        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/master/signatures.sh")
+        VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
+        #write repo pem file to trust/private. Only repo key required to add delegate
+        JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
+        JSON_PUB_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA")"
+      fi
+
+      # Create the new signer key
+      source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/test/create_signer.sh")
+
+      if [ "$VAULT_INSTANCE" ]; then
+        # save the new signer pem key to the Vault
+        deleteSecret "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA"
+        deleteSecret "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA"
+
+        JSON_DATA=$(addTrustFileToJSON "$DEVOPS_SIGNER" "$JSON_DATA" "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE")
+        publicPem=$(base64TextEncode "./$DEVOPS_SIGNER.pub")
+        data=$(addJSONEntry "$data" "name" "$DEVOPS_SIGNER.pub")
+        data=$(addJSONEntry "$data" "value" "$publicPem")
+        JSON_PUB_DATA=$(addJSONEntry "$JSON_PUB_DATA" "$DEVOPS_SIGNER" "$data")
+
+        saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA" "$JSON_DATA"
+        saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA" "$JSON_PUB_DATA"
+      fi
+  - name: Create Validation Signer Keys
+    type: builder
+    curatedDockerImage: default
+    artifact_dir: back-your-keys
+    build_type: customimage
+    docker_image: jauninb/pbi-docker:latest
+    script: |
+      #!/bin/bash
+      echo "Create signer $DEVOPS_SIGNER for $REGISTRY_URL/$REGISTRY_NAMESPACE/$IMAGE_NAME"
+      
+      export IBMCLOUD_API_KEY=$IBM_CLOUD_API_KEY
+      export DOCKER_CONTENT_TRUST=1
+      DEVOPS_SIGNER="$DEVOPS_VALIDATION_SIGNER"
+      # Setup Docker-In-Docker
+      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_dind.sh")
+
+      # configure the container registry
+      export REGISTRY_REGION=$(echo "$REGISTRY_REGION" | awk -F ':' '{print $NF;}')
+      ibmcloud cr region-set $REGISTRY_REGION
+      # login docker to ibm container registry
+      ibmcloud cr login
+      if [ -z "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" ]; then
+        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(openssl rand -base64 16)
+      fi
+      # Restore  keys
+      if [ -z "$VAULT_INSTANCE" ]; then
+        echo "Restoring keys from input's private_keys_backup.tar.gz file"
+        tar xvzf private_keys_backup.tar.gz --directory ~
+      else
+        echo "Restoring keys from $VAULT_INSTANCE"
+        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/master/signatures.sh")
+        VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
+        #write repo pem file to trust/private
+        JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
+        JSON_PUB_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA")"
+      fi
+
+      # Create the new signer key
+      source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/test/create_signer.sh")
+
+      if [ "$VAULT_INSTANCE" ]; then
+        # save the new signer pem key to the Vault
+        echo "Saving new signer key to $VAULT_INSTANCE"
+        #save the new signer pem key to the Vault
+       
+        deleteSecret "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA"
+        deleteSecret "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA"
+
+        JSON_DATA=$(addTrustFileToJSON "$DEVOPS_SIGNER" "$JSON_DATA" "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE")
+        publicPem=$(base64TextEncode "./$DEVOPS_SIGNER.pub")
+        data=$(addJSONEntry "$data" "name" "$DEVOPS_SIGNER.pub")
+        data=$(addJSONEntry "$data" "value" "$publicPem")
+        JSON_PUB_DATA=$(addJSONEntry "$JSON_PUB_DATA" "$DEVOPS_SIGNER" "$data")
+
+        saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA" "$JSON_DATA"
+        saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA" "$JSON_PUB_DATA"
+      fi   
 - name: Init Docker Content Trust
   properties:
   - name: REGISTRY_REGION
@@ -83,18 +215,18 @@ stages:
       if [ "$VAULT_INSTANCE" ]; then
         echo "Backing-up keys in $VAULT_INSTANCE"
         # jsonify the Vault access values
-        source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
+        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/master/signatures.sh")
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
-
+        JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
         #save the root, repo pem key files to the Vault
         JSON_ROOT_DATA=$(addTrustFileToJSON "root" "$JSON_ROOT_DATA")
         JSON_ROOT_DATA=$(addJSONEntry "$JSON_ROOT_DATA" "DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE" "$DOCKER_CONTENT_TRUST_ROOT_PASSPHRASE")
-        JSON_DATA=$(addTrustFileToJSON "target" "$JSON_DATA")
-        JSON_DATA=$(addJSONEntry "$JSON_DATA" "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE")
+        JSON_DATA=$(addTrustFileToJSON "target" "$JSON_DATA" "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE")
+        deleteSecret "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA"
         saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.rootkey" "$VAULT_DATA" "$JSON_ROOT_DATA"
         saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA" "$JSON_DATA"
       fi
-- name: Create Build Signer
+- name: Authorize Build Delegate
   inputs:
   - type: job
     stage: Init Docker Content Trust
@@ -109,10 +241,10 @@ stages:
     value: dct.properties
     type: file
   jobs:
-  - name: Create Build Signer Keys
+  - name: Add Build Signer Key
     type: builder
     curatedDockerImage: default
-    artifact_dir: back-your-keys
+    #artifact_dir: back-your-keys
     build_type: customimage
     docker_image: jauninb/pbi-docker:latest
     script: |
@@ -130,9 +262,10 @@ stages:
       ibmcloud cr region-set $REGISTRY_REGION
       # login docker to ibm container registry
       ibmcloud cr login
-
+      echo "check contents of trust"
       # Restore root & repository keys
       if [ -z "$VAULT_INSTANCE" ]; then
+        echo "SHOULD NOT RUN"
         echo "Restoring keys from input's private_keys_backup.tar.gz file"
         tar xvzf private_keys_backup.tar.gz --directory ~
       else
@@ -143,20 +276,17 @@ stages:
         JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
         repokey=$(getJSONValue "target" "$JSON_DATA")
         writeFile "$repokey"
-        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(getJSONValue "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$JSON_DATA")
-      fi
+        PUBLIC_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA")"
+        publickey=$(getJSONValue "$DEVOPS_SIGNER" "$PUBLIC_DATA")
+        writeFile "$publickey"
+        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(getJSONValue "passphrase" "$repokey")
 
-      # Create the new signer key
-      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/create_dct_signer_key.sh")
-
-      if [ "$VAULT_INSTANCE" ]; then
-        # save the new signer pem key to the Vault
-        echo "Saving new signer key to $VAULT_INSTANCE"
-        JSON_DATA=$(addTrustFileToJSON "$DEVOPS_SIGNER" "$JSON_DATA")
-        deleteSecret "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA"
-        saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA" "$JSON_DATA"
+        #source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/test/add_signer.sh")
+        cd ~/.docker/trust/private
+        docker trust signer add --key "${DEVOPS_SIGNER}.pub" "$DEVOPS_SIGNER" "$GUN"
+        docker trust inspect --pretty $GUN
       fi
-- name: Create Validation Signer
+- name: Authorize Validation Delegate
   inputs:
   - type: job
     stage: Create Build Signer
@@ -171,10 +301,10 @@ stages:
     value: dct.properties
     type: file
   jobs:
-  - name: Create Validation Signer Keys
+  - name: Add Validation Signer Key
     type: builder
     curatedDockerImage: default
-    artifact_dir: back-your-keys
+    #artifact_dir: back-your-keys
     build_type: customimage
     docker_image: jauninb/pbi-docker:latest
     script: |
@@ -192,32 +322,29 @@ stages:
       ibmcloud cr region-set $REGISTRY_REGION
       # login docker to ibm container registry
       ibmcloud cr login
-
-      # Restore  keys
+      echo "check contents of trust"
+      # Restore root & repository keys
       if [ -z "$VAULT_INSTANCE" ]; then
+        echo "SHOULD NOT RUN"
         echo "Restoring keys from input's private_keys_backup.tar.gz file"
         tar xvzf private_keys_backup.tar.gz --directory ~
       else
         echo "Restoring keys from $VAULT_INSTANCE"
         source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
-        #write repo pem file to trust/private
+        #write repo pem file to trust/private. Only repo key required to add delegate
         JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
         repokey=$(getJSONValue "target" "$JSON_DATA")
         writeFile "$repokey"
-        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(getJSONValue "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$JSON_DATA")
-      fi
+        PUBLIC_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA")"
+        publickey=$(getJSONValue "$DEVOPS_SIGNER" "$PUBLIC_DATA")
+        writeFile "$publickey"
+        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(getJSONValue "passphrase" "$repokey")
 
-      # Create the new signer key
-      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/create_dct_signer_key.sh")
-
-      if [ "$VAULT_INSTANCE" ]; then
-        # save the new signer pem key to the Vault
-        echo "Saving new signer key to $VAULT_INSTANCE"
-        #save the new signer pem key to the Vault
-        JSON_DATA=$(addTrustFileToJSON "$DEVOPS_SIGNER" "$JSON_DATA")
-        deleteSecret "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA"
-        saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA" "$JSON_DATA"
+        #source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/test/add_signer.sh")
+        cd ~/.docker/trust/private
+        docker trust signer add --key "${DEVOPS_SIGNER}.pub" "$DEVOPS_SIGNER" "$GUN"
+        docker trust inspect --pretty $GUN
       fi
 - name: Create K8S secrets for image signing (optional)
   inputs:
