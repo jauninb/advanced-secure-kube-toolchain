@@ -41,117 +41,70 @@ stages:
     value: ${VALIDATION_SIGNER}
     type: text
   jobs:
-  - name: Create Build Signer Keys
+  - name: Create Signer Keys
     type: builder
     curatedDockerImage: default
-    artifact_dir: back-your-keys
     build_type: customimage
     docker_image: jauninb/pbi-docker:latest
     script: |
       #!/bin/bash
-      echo "Create signer $DEVOPS_SIGNER for $REGISTRY_URL/$REGISTRY_NAMESPACE/$IMAGE_NAME"
-      DEVOPS_SIGNER="$DEVOPS_BUILD_SIGNER"
-      export IBMCLOUD_API_KEY=$IBM_CLOUD_API_KEY
+      
+      echo "Create  $DEVOPS_SIGNER singer key"
       export DOCKER_CONTENT_TRUST=1
+      export IBMCLOUD_API_KEY=$IBM_CLOUD_API_KEY
+      export IBMCLOUD_TARGET_REGION=${IBMCLOUD_TARGET_REGION:-"eu-gb"}
 
-      # Setup Docker-In-Docker
-      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_dind.sh")
 
-      # configure the container registry
-      export REGISTRY_REGION=$(echo "$REGISTRY_REGION" | awk -F ':' '{print $NF;}')
-      ibmcloud cr region-set $REGISTRY_REGION
-      # login docker to ibm container registry
-      ibmcloud cr login
+      signerList=()
+      signerList+=("$DEVOPS_BUILD_SIGNER")
+      signerList+=("$DEVOPS_VALIDATION_SIGNER")
+
+      # if target region is in the 'ibm:yp:<region>' just keep the region part
+      REGION_SUBSET=$(echo "$IBMCLOUD_TARGET_REGION" | awk -F ':' '{print $3;}')
+      if [[ -z "$REGION_SUBSET" ]]; then
+        echo "IBM Cloud Target Region is $IBMCLOUD_TARGET_REGION"
+      else
+        export IBMCLOUD_TARGET_REGION=$REGION_SUBSET
+        echo "IBM Cloud Target Region is $IBMCLOUD_TARGET_REGION. export IBMCLOUD_TARGET_REGION=$REGION_SUBSET done"
+      fi
+
+      ibmcloud login --apikey "$IBM_CLOUD_API_KEY" -r "$IBMCLOUD_TARGET_REGION"
       if [ -z "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" ]; then
         export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(openssl rand -base64 16)
       fi
+
       # Restore root & repository keys
       if [ -z "$VAULT_INSTANCE" ]; then
+        #run fallback key generation and store in tar?
         echo "Restoring keys from input's private_keys_backup.tar.gz file"
         tar xvzf private_keys_backup.tar.gz --directory ~
       else
         echo "Restoring keys from $VAULT_INSTANCE"
-        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/master/signatures.sh")
+        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/test/signatures.sh")
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
         #write repo pem file to trust/private. Only repo key required to add delegate
         JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
         JSON_PUB_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA")"
-      fi
 
-      # Create the new signer key
-      source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/test/create_signer.sh")
-
-      if [ "$VAULT_INSTANCE" ]; then
+        #loop through list of signers and create their keys
+        for i in "${signerList[@]}"
+        do
+          : 
+          # Create the new signer key
+          DEVOPS_SIGNER="$i"
+          docker trust key generate "$DEVOPS_SIGNER"
+          JSON_DATA=$(addTrustFileToJSON "$DEVOPS_SIGNER" "$JSON_DATA" "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE")
+          publicPem=$(base64TextEncode "./$DEVOPS_SIGNER.pub")
+          data=$(addJSONEntry "$data" "name" "$DEVOPS_SIGNER.pub")
+          data=$(addJSONEntry "$data" "value" "$publicPem")
+          JSON_PUB_DATA=$(addJSONEntry "$JSON_PUB_DATA" "$DEVOPS_SIGNER" "$data")
+        done
         # save the new signer pem key to the Vault
         deleteSecret "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA"
         deleteSecret "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA"
-
-        JSON_DATA=$(addTrustFileToJSON "$DEVOPS_SIGNER" "$JSON_DATA" "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE")
-        publicPem=$(base64TextEncode "./$DEVOPS_SIGNER.pub")
-        data=$(addJSONEntry "$data" "name" "$DEVOPS_SIGNER.pub")
-        data=$(addJSONEntry "$data" "value" "$publicPem")
-        JSON_PUB_DATA=$(addJSONEntry "$JSON_PUB_DATA" "$DEVOPS_SIGNER" "$data")
-
         saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA" "$JSON_DATA"
         saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA" "$JSON_PUB_DATA"
       fi
-  - name: Create Validation Signer Keys
-    type: builder
-    curatedDockerImage: default
-    artifact_dir: back-your-keys
-    build_type: customimage
-    docker_image: jauninb/pbi-docker:latest
-    script: |
-      #!/bin/bash
-      echo "Create signer $DEVOPS_SIGNER for $REGISTRY_URL/$REGISTRY_NAMESPACE/$IMAGE_NAME"
-      
-      export IBMCLOUD_API_KEY=$IBM_CLOUD_API_KEY
-      export DOCKER_CONTENT_TRUST=1
-      DEVOPS_SIGNER="$DEVOPS_VALIDATION_SIGNER"
-      # Setup Docker-In-Docker
-      source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/setup_dind.sh")
-
-      # configure the container registry
-      export REGISTRY_REGION=$(echo "$REGISTRY_REGION" | awk -F ':' '{print $NF;}')
-      ibmcloud cr region-set $REGISTRY_REGION
-      # login docker to ibm container registry
-      ibmcloud cr login
-      if [ -z "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" ]; then
-        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(openssl rand -base64 16)
-      fi
-      # Restore  keys
-      if [ -z "$VAULT_INSTANCE" ]; then
-        echo "Restoring keys from input's private_keys_backup.tar.gz file"
-        tar xvzf private_keys_backup.tar.gz --directory ~
-      else
-        echo "Restoring keys from $VAULT_INSTANCE"
-        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/master/signatures.sh")
-        VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
-        #write repo pem file to trust/private
-        JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
-        JSON_PUB_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA")"
-      fi
-
-      # Create the new signer key
-      source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/test/create_signer.sh")
-
-      if [ "$VAULT_INSTANCE" ]; then
-        # save the new signer pem key to the Vault
-        echo "Saving new signer key to $VAULT_INSTANCE"
-        #save the new signer pem key to the Vault
-       
-        deleteSecret "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA"
-        deleteSecret "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA"
-
-        JSON_DATA=$(addTrustFileToJSON "$DEVOPS_SIGNER" "$JSON_DATA" "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE")
-        publicPem=$(base64TextEncode "./$DEVOPS_SIGNER.pub")
-        data=$(addJSONEntry "$data" "name" "$DEVOPS_SIGNER.pub")
-        data=$(addJSONEntry "$data" "value" "$publicPem")
-        JSON_PUB_DATA=$(addJSONEntry "$JSON_PUB_DATA" "$DEVOPS_SIGNER" "$data")
-
-        saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA" "$JSON_DATA"
-        saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA" "$JSON_PUB_DATA"
-      fi   
 - name: Init Docker Content Trust
   properties:
   - name: REGISTRY_REGION
@@ -241,7 +194,7 @@ stages:
     value: dct.properties
     type: file
   jobs:
-  - name: Add Build Signer Key
+  - name: Add Build signer
     type: builder
     curatedDockerImage: default
     #artifact_dir: back-your-keys
@@ -289,8 +242,8 @@ stages:
 - name: Authorize Validation Delegate
   inputs:
   - type: job
-    stage: Create Build Signer
-    job: Create Build Signer Keys
+    stage: Authorize Build Delegate
+    job: Add Build signer
   triggers:
   - type: stage
   properties:
@@ -349,8 +302,8 @@ stages:
 - name: Create K8S secrets for image signing (optional)
   inputs:
   - type: job
-    stage: Create Validation Signer
-    job: Create Validation Signer Keys
+    stage: Authorize Validation Delegate
+    job: Add Validation Signer Key
   triggers:
   - type: stage
   properties:
