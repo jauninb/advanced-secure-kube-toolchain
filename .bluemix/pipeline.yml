@@ -190,8 +190,8 @@ stages:
         JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
         signerkey=$(getJSONValue "$DEVOPS_SIGNER" "$JSON_DATA")
         writeFile "$signerkey"
-        # Retrieve the repository passphrase
-        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(getJSONValue "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$JSON_DATA")
+        # Retrieve the signer passphrase
+        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(getJSONValue "passphrase" "$signerkey")
       fi
 
       export DCT_DISABLED=false
@@ -270,8 +270,8 @@ stages:
         JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
         signerkey=$(getJSONValue "$DEVOPS_SIGNER" "$JSON_DATA")
         writeFile "$signerkey"
-        # Retrieve the repository passphrase
-        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(getJSONValue "DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" "$JSON_DATA")
+        # Retrieve the signer passphrase
+        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(getJSONValue "passphrase" "$signerkey")
       fi
 
       export DCT_DISABLED=false

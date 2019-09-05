@@ -168,7 +168,7 @@ stages:
       if [ "$VAULT_INSTANCE" ]; then
         echo "Backing-up keys in $VAULT_INSTANCE"
         # jsonify the Vault access values
-        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/master/signatures.sh")
+        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/test/signatures.sh")
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
         JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
         #save the root, repo pem key files to the Vault
@@ -179,7 +179,8 @@ stages:
         saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.rootkey" "$VAULT_DATA" "$JSON_ROOT_DATA"
         saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA" "$JSON_DATA"
       fi
-- name: Authorize Build Delegate
+      echo "GUN $GUN"
+- name: Add Build Delegate
   inputs:
   - type: job
     stage: Init Docker Content Trust
@@ -215,34 +216,38 @@ stages:
       ibmcloud cr region-set $REGISTRY_REGION
       # login docker to ibm container registry
       ibmcloud cr login
-      echo "check contents of trust"
       # Restore root & repository keys
       if [ -z "$VAULT_INSTANCE" ]; then
-        echo "SHOULD NOT RUN"
         echo "Restoring keys from input's private_keys_backup.tar.gz file"
         tar xvzf private_keys_backup.tar.gz --directory ~
+        #create and add signer keys
+        source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/test/create_dct_signer_key.sh")
       else
         echo "Restoring keys from $VAULT_INSTANCE"
-        source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
+        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/test/signatures.sh")
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
         #write repo pem file to trust/private. Only repo key required to add delegate
+        export CURRENT_PATH=$(pwd)
         JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
         repokey=$(getJSONValue "target" "$JSON_DATA")
+        echo "*****PRINTING REPO KEY DATA"
+        echo "$JSON_DATA"
         writeFile "$repokey"
         PUBLIC_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA")"
         publickey=$(getJSONValue "$DEVOPS_SIGNER" "$PUBLIC_DATA")
-        writeFile "$publickey"
+        echo "*****PRINTING PUBLIC KEY DATA"
+        echo "$PUBLIC_DATA"
+        writeFile "$publickey" "$CURRENT_PATH"
         export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(getJSONValue "passphrase" "$repokey")
-
-        #source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/test/add_signer.sh")
-        cd ~/.docker/trust/private
         docker trust signer add --key "${DEVOPS_SIGNER}.pub" "$DEVOPS_SIGNER" "$GUN"
         docker trust inspect --pretty $GUN
+        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/test/testrun.sh")
       fi
-- name: Authorize Validation Delegate
+      echo "GUN $GUN"
+- name: Add Validation Delegate
   inputs:
   - type: job
-    stage: Authorize Build Delegate
+    stage: Add Build Delegate
     job: Add Build signer
   triggers:
   - type: stage
@@ -275,34 +280,38 @@ stages:
       ibmcloud cr region-set $REGISTRY_REGION
       # login docker to ibm container registry
       ibmcloud cr login
-      echo "check contents of trust"
       # Restore root & repository keys
       if [ -z "$VAULT_INSTANCE" ]; then
-        echo "SHOULD NOT RUN"
         echo "Restoring keys from input's private_keys_backup.tar.gz file"
         tar xvzf private_keys_backup.tar.gz --directory ~
+        #create and add signer keys
+        source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/test/create_dct_signer_key.sh")
       else
         echo "Restoring keys from $VAULT_INSTANCE"
-        source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
+        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/test/signatures.sh")
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
         #write repo pem file to trust/private. Only repo key required to add delegate
+        export CURRENT_PATH=$(pwd)
         JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
         repokey=$(getJSONValue "target" "$JSON_DATA")
+        echo "*****PRINTING REPO KEY DATA"
+        echo "$JSON_DATA"
         writeFile "$repokey"
         PUBLIC_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA")"
         publickey=$(getJSONValue "$DEVOPS_SIGNER" "$PUBLIC_DATA")
-        writeFile "$publickey"
+        echo "*****PRINTING PUBLIC KEY DATA"
+        echo "$PUBLIC_DATA"
+        writeFile "$publickey" "$CURRENT_PATH"
         export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(getJSONValue "passphrase" "$repokey")
-
-        #source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/test/add_signer.sh")
-        cd ~/.docker/trust/private
         docker trust signer add --key "${DEVOPS_SIGNER}.pub" "$DEVOPS_SIGNER" "$GUN"
         docker trust inspect --pretty $GUN
+        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/test/testrun.sh")
       fi
+      echo "GUN $GUN"
 - name: Create K8S secrets for image signing (optional)
   inputs:
   - type: job
-    stage: Authorize Validation Delegate
+    stage: Add Validation Delegate
     job: Add Validation Signer Key
   triggers:
   - type: stage
@@ -357,11 +366,12 @@ stages:
       else
         echo "No-op - Vault instance $VAULT_INSTANCE contains signing keys"
       fi
+      echo "GUN $GUN"
 - name: Setup IKS Runtime enforcement in deployment cluster
   inputs:
   - type: job
-    stage: Create Validation Signer
-    job: Create Validation Signer Keys
+    stage: Add Validation Delegate
+    job: Add Validation Signer Key
   triggers:
   - type: stage
     enabled: false
@@ -386,11 +396,10 @@ stages:
       resource_group: ${PROD_RESOURCE_GROUP}
       kubernetes_cluster: ${PROD_CLUSTER_NAME}
     script: |
-      #!/bin/bash
+       #!/bin/bash
       #set -x
 
       source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/check_helm_up_and_running.sh")
-
       # Install CISE
       if helm list cise | grep '^cise'; then
         echo "Container Image Security Enforcement is already installed"
