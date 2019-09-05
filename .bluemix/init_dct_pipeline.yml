@@ -396,10 +396,11 @@ stages:
       resource_group: ${PROD_RESOURCE_GROUP}
       kubernetes_cluster: ${PROD_CLUSTER_NAME}
     script: |
-       #!/bin/bash
+      #!/bin/bash
       #set -x
 
       source <(curl -s -S -L "https://raw.githubusercontent.com/jauninb/jumpstart/master/check_helm_up_and_running.sh")
+
       # Install CISE
       if helm list cise | grep '^cise'; then
         echo "Container Image Security Enforcement is already installed"
