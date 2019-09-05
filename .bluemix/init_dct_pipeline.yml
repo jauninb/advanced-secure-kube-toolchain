@@ -229,7 +229,6 @@ stages:
         saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.rootkey" "$VAULT_DATA" "$JSON_ROOT_DATA"
         saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA" "$JSON_DATA"
       fi
-      echo "GUN $GUN"
 - name: Add Build Delegate
   inputs:
   - type: job
@@ -280,20 +279,15 @@ stages:
         export CURRENT_PATH=$(pwd)
         JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
         repokey=$(getJSONValue "target" "$JSON_DATA")
-        echo "*****PRINTING REPO KEY DATA"
-        echo "$JSON_DATA"
         writeFile "$repokey"
         PUBLIC_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA")"
         publickey=$(getJSONValue "$DEVOPS_SIGNER" "$PUBLIC_DATA")
-        echo "*****PRINTING PUBLIC KEY DATA"
-        echo "$PUBLIC_DATA"
         writeFile "$publickey" "$CURRENT_PATH"
         export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(getJSONValue "passphrase" "$repokey")
         docker trust signer add --key "${DEVOPS_SIGNER}.pub" "$DEVOPS_SIGNER" "$GUN"
         docker trust inspect --pretty $GUN
         source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/test/testrun.sh")
       fi
-      echo "GUN $GUN"
 - name: Add Validation Delegate
   inputs:
   - type: job
@@ -344,20 +338,15 @@ stages:
         export CURRENT_PATH=$(pwd)
         JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
         repokey=$(getJSONValue "target" "$JSON_DATA")
-        echo "*****PRINTING REPO KEY DATA"
-        echo "$JSON_DATA"
         writeFile "$repokey"
         PUBLIC_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA")"
         publickey=$(getJSONValue "$DEVOPS_SIGNER" "$PUBLIC_DATA")
-        echo "*****PRINTING PUBLIC KEY DATA"
-        echo "$PUBLIC_DATA"
         writeFile "$publickey" "$CURRENT_PATH"
         export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(getJSONValue "passphrase" "$repokey")
         docker trust signer add --key "${DEVOPS_SIGNER}.pub" "$DEVOPS_SIGNER" "$GUN"
         docker trust inspect --pretty $GUN
         source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/test/testrun.sh")
       fi
-      echo "GUN $GUN"
 - name: Create K8S secrets for image signing (optional)
   inputs:
   - type: job
