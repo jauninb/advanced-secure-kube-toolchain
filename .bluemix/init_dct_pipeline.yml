@@ -66,7 +66,8 @@ stages:
         fi
 
         ibmcloud login --apikey "$IBM_CLOUD_API_KEY" -r "$IBMCLOUD_TARGET_REGION"
-
+        
+        DEVOPS_SIGNER="$DEVOPS_BUILD_SIGNER"
         source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/update/signatures.sh")
         source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/update/create_signer.sh")
       fi
@@ -93,9 +94,10 @@ stages:
           export IBMCLOUD_TARGET_REGION=$REGION_SUBSET
           echo "IBM Cloud Target Region is $IBMCLOUD_TARGET_REGION. export IBMCLOUD_TARGET_REGION=$REGION_SUBSET done"
         fi
-        
+
         ibmcloud login --apikey "$IBM_CLOUD_API_KEY" -r "$IBMCLOUD_TARGET_REGION"
 
+        DEVOPS_SIGNER="$DEVOPS_VALIDATION_SIGNER"
         source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/update/signatures.sh")
         source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/update/create_signer.sh")
       fi
