@@ -48,53 +48,27 @@ stages:
     docker_image: jauninb/pbi-docker:latest
     script: |
       #!/bin/bash
-      DEVOPS_SIGNER="$DEVOPS_BUILD_SIGNER"
-      echo "Create  $DEVOPS_SIGNER singer key"
-      export DOCKER_CONTENT_TRUST=1
-      export IBMCLOUD_API_KEY=$IBM_CLOUD_API_KEY
-      export IBMCLOUD_TARGET_REGION=${IBMCLOUD_TARGET_REGION:-"eu-gb"}
-
-      # if target region is in the 'ibm:yp:<region>' just keep the region part
-      REGION_SUBSET=$(echo "$IBMCLOUD_TARGET_REGION" | awk -F ':' '{print $3;}')
-      if [[ -z "$REGION_SUBSET" ]]; then
-        echo "IBM Cloud Target Region is $IBMCLOUD_TARGET_REGION"
-      else
-        export IBMCLOUD_TARGET_REGION=$REGION_SUBSET
-        echo "IBM Cloud Target Region is $IBMCLOUD_TARGET_REGION. export IBMCLOUD_TARGET_REGION=$REGION_SUBSET done"
-      fi
-
-      ibmcloud login --apikey "$IBM_CLOUD_API_KEY" -r "$IBMCLOUD_TARGET_REGION"
-      if [ -z "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" ]; then
-        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(openssl rand -base64 16)
-      fi
-
-      # Create the new signer key
-      docker trust key generate "$DEVOPS_SIGNER"
 
       # Restore root & repository keys
       if [ -z "$VAULT_INSTANCE" ]; then
-        echo "Restoring keys from input's private_keys_backup.tar.gz file"
-        tar xvzf private_keys_backup.tar.gz --directory ~
+        echo "No op"
       else
-        echo "Restoring keys from $VAULT_INSTANCE"
-        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/test/signatures.sh")
-        VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
-        #write repo pem file to trust/private. Only repo key required to add delegate
-        JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
-        JSON_PUB_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA")"
+        export IBMCLOUD_API_KEY=$IBM_CLOUD_API_KEY
+        export IBMCLOUD_TARGET_REGION=${IBMCLOUD_TARGET_REGION:-"eu-gb"}
 
-        # save the new signer pem key to the Vault
-        deleteSecret "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA"
-        deleteSecret "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA"
+        # if target region is in the 'ibm:yp:<region>' just keep the region part
+        REGION_SUBSET=$(echo "$IBMCLOUD_TARGET_REGION" | awk -F ':' '{print $3;}')
+        if [[ -z "$REGION_SUBSET" ]]; then
+          echo "IBM Cloud Target Region is $IBMCLOUD_TARGET_REGION"
+        else
+          export IBMCLOUD_TARGET_REGION=$REGION_SUBSET
+          echo "IBM Cloud Target Region is $IBMCLOUD_TARGET_REGION. export IBMCLOUD_TARGET_REGION=$REGION_SUBSET done"
+        fi
 
-        JSON_DATA=$(addTrustFileToJSON "$DEVOPS_SIGNER" "$JSON_DATA" "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE")
-        publicPem=$(base64TextEncode "./$DEVOPS_SIGNER.pub")
-        data=$(addJSONEntry "$data" "name" "$DEVOPS_SIGNER.pub")
-        data=$(addJSONEntry "$data" "value" "$publicPem")
-        JSON_PUB_DATA=$(addJSONEntry "$JSON_PUB_DATA" "$DEVOPS_SIGNER" "$data")
+        ibmcloud login --apikey "$IBM_CLOUD_API_KEY" -r "$IBMCLOUD_TARGET_REGION"
 
-        saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA" "$JSON_DATA"
-        saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA" "$JSON_PUB_DATA"
+        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/update/signatures.sh")
+        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/update/create_signer.sh")
       fi
   - name: Create Validation Signer Keys
     type: builder
@@ -103,57 +77,27 @@ stages:
     docker_image: jauninb/pbi-docker:latest
     script: |
       #!/bin/bash
-
-      DEVOPS_SIGNER="$DEVOPS_VALIDATION_SIGNER"
-      echo "Create  $DEVOPS_SIGNER key"
-      export DOCKER_CONTENT_TRUST=1
-      export IBMCLOUD_API_KEY=$IBM_CLOUD_API_KEY
-      export IBMCLOUD_TARGET_REGION=${IBMCLOUD_TARGET_REGION:-"eu-gb"}
-
-      # if target region is in the 'ibm:yp:<region>' just keep the region part
-      REGION_SUBSET=$(echo "$IBMCLOUD_TARGET_REGION" | awk -F ':' '{print $3;}')
-      if [[ -z "$REGION_SUBSET" ]]; then
-        echo "IBM Cloud Target Region is $IBMCLOUD_TARGET_REGION"
-      else
-        export IBMCLOUD_TARGET_REGION=$REGION_SUBSET
-        echo "IBM Cloud Target Region is $IBMCLOUD_TARGET_REGION. export IBMCLOUD_TARGET_REGION=$REGION_SUBSET done"
-      fi
-      ibmcloud login --apikey "$IBM_CLOUD_API_KEY" -r "$IBMCLOUD_TARGET_REGION"
-
-      if [ -z "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE" ]; then
-        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(openssl rand -base64 16)
-      fi
       
-      # Create the new signer key
-      docker trust key generate "$DEVOPS_SIGNER"
-
       # Restore  keys
       if [ -z "$VAULT_INSTANCE" ]; then
-        echo "Restoring keys from input's private_keys_backup.tar.gz file"
-        tar xvzf private_keys_backup.tar.gz --directory ~
+        echo "No op"
       else
-        echo "Restoring keys from $VAULT_INSTANCE"
-        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/test/signatures.sh")
-        VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
-        #write repo pem file to trust/private
-        JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
-        JSON_PUB_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA")"
+        export IBMCLOUD_API_KEY=$IBM_CLOUD_API_KEY
+        export IBMCLOUD_TARGET_REGION=${IBMCLOUD_TARGET_REGION:-"eu-gb"}
 
-        # save the new signer pem key to the Vault
-        echo "Saving new signer key to $VAULT_INSTANCE"
-        #save the new signer pem key to the Vault
-       
-        deleteSecret "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA"
-        deleteSecret "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA"
+        # if target region is in the 'ibm:yp:<region>' just keep the region part
+        REGION_SUBSET=$(echo "$IBMCLOUD_TARGET_REGION" | awk -F ':' '{print $3;}')
+        if [[ -z "$REGION_SUBSET" ]]; then
+          echo "IBM Cloud Target Region is $IBMCLOUD_TARGET_REGION"
+        else
+          export IBMCLOUD_TARGET_REGION=$REGION_SUBSET
+          echo "IBM Cloud Target Region is $IBMCLOUD_TARGET_REGION. export IBMCLOUD_TARGET_REGION=$REGION_SUBSET done"
+        fi
+        
+        ibmcloud login --apikey "$IBM_CLOUD_API_KEY" -r "$IBMCLOUD_TARGET_REGION"
 
-        JSON_DATA=$(addTrustFileToJSON "$DEVOPS_SIGNER" "$JSON_DATA" "$DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE")
-        publicPem=$(base64TextEncode "./$DEVOPS_SIGNER.pub")
-        data=$(addJSONEntry "$data" "name" "$DEVOPS_SIGNER.pub")
-        data=$(addJSONEntry "$data" "value" "$publicPem")
-        JSON_PUB_DATA=$(addJSONEntry "$JSON_PUB_DATA" "$DEVOPS_SIGNER" "$data")
-
-        saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA" "$JSON_DATA"
-        saveData "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA" "$JSON_PUB_DATA"
+        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/update/signatures.sh")
+        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/update/create_signer.sh")
       fi
 - name: Init Docker Content Trust
   properties:
@@ -218,7 +162,7 @@ stages:
       if [ "$VAULT_INSTANCE" ]; then
         echo "Backing-up keys in $VAULT_INSTANCE"
         # jsonify the Vault access values
-        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/test/signatures.sh")
+        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/update/signatures.sh")
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
         JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
         #save the root, repo pem key files to the Vault
@@ -270,23 +214,11 @@ stages:
         echo "Restoring keys from input's private_keys_backup.tar.gz file"
         tar xvzf private_keys_backup.tar.gz --directory ~
         #create and add signer keys
-        source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/test/create_dct_signer_key.sh")
+        source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/update/create_dct_signer_key.sh")
       else
         echo "Restoring keys from $VAULT_INSTANCE"
-        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/test/signatures.sh")
-        VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
-        #write repo pem file to trust/private. Only repo key required to add delegate
-        export CURRENT_PATH=$(pwd)
-        JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
-        repokey=$(getJSONValue "target" "$JSON_DATA")
-        writeFile "$repokey"
-        PUBLIC_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA")"
-        publickey=$(getJSONValue "$DEVOPS_SIGNER" "$PUBLIC_DATA")
-        writeFile "$publickey" "$CURRENT_PATH"
-        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(getJSONValue "passphrase" "$repokey")
-        docker trust signer add --key "${DEVOPS_SIGNER}.pub" "$DEVOPS_SIGNER" "$GUN"
-        docker trust inspect --pretty $GUN
-        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/test/testrun.sh")
+        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/update/signatures.sh")
+        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/update/add_signer.sh")
       fi
 - name: Add Validation Delegate
   inputs:
@@ -329,23 +261,11 @@ stages:
         echo "Restoring keys from input's private_keys_backup.tar.gz file"
         tar xvzf private_keys_backup.tar.gz --directory ~
         #create and add signer keys
-        source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/test/create_dct_signer_key.sh")
+        source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/update/create_dct_signer_key.sh")
       else
         echo "Restoring keys from $VAULT_INSTANCE"
-        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/test/signatures.sh")
-        VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
-        #write repo pem file to trust/private. Only repo key required to add delegate
-        export CURRENT_PATH=$(pwd)
-        JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
-        repokey=$(getJSONValue "target" "$JSON_DATA")
-        writeFile "$repokey"
-        PUBLIC_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.pub" "$VAULT_DATA")"
-        publickey=$(getJSONValue "$DEVOPS_SIGNER" "$PUBLIC_DATA")
-        writeFile "$publickey" "$CURRENT_PATH"
-        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(getJSONValue "passphrase" "$repokey")
-        docker trust signer add --key "${DEVOPS_SIGNER}.pub" "$DEVOPS_SIGNER" "$GUN"
-        docker trust inspect --pretty $GUN
-        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/test/testrun.sh")
+        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/update/signatures.sh")
+        source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/update/add_signer.sh")
       fi
 - name: Create K8S secrets for image signing (optional)
   inputs:
