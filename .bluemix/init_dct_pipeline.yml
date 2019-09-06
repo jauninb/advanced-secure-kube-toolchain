@@ -217,6 +217,7 @@ stages:
         source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/update/create_dct_signer_key.sh")
       else
         echo "Restoring keys from $VAULT_INSTANCE"
+        DEVOPS_SIGNER="$DEVOPS_BUILD_SIGNER"
         source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/update/signatures.sh")
         source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/update/add_signer.sh")
       fi
@@ -264,6 +265,7 @@ stages:
         source <(curl -s -S -L "https://raw.githubusercontent.com/huayuenh/jumpstart/update/create_dct_signer_key.sh")
       else
         echo "Restoring keys from $VAULT_INSTANCE"
+        DEVOPS_SIGNER="$VALIDATION_SIGNER"
         source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/update/signatures.sh")
         source <(curl -sSL "https://raw.githubusercontent.com/huayuenh/jumpstart/update/add_signer.sh")
       fi
