@@ -187,10 +187,11 @@ stages:
         source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
         # Restore repository pem key and signer pem key
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
-        writeFile "$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.repokey" "$VAULT_DATA")"
-        writeFile "$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.$DEVOPS_SIGNER" "$VAULT_DATA")"
-        # Retrieve the repository passphrase
-        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.DCT_REPOSITORY_PASSPHRASE" "$VAULT_DATA")
+        JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
+        signerkey=$(getJSONValue "$DEVOPS_SIGNER" "$JSON_DATA")
+        writeFile "$signerkey"
+        # Retrieve the signer passphrase
+        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(getJSONValue "passphrase" "$signerkey")
       fi
 
       export DCT_DISABLED=false
@@ -266,10 +267,11 @@ stages:
         source <(curl -sSL "https://raw.githubusercontent.com/jauninb/jumpstart/master/signatures.sh")
         # Restore repository pem key and signer pem key
         VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "$IBMCLOUD_TARGET_REGION" "$IBMCLOUD_TARGET_RESOURCE_GROUP")
-        writeFile "$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.repokey" "$VAULT_DATA")"
-        writeFile "$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.$DEVOPS_SIGNER" "$VAULT_DATA")"
-        # retrieve the repository passphrase
-        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.DCT_REPOSITORY_PASSPHRASE" "$VAULT_DATA")
+        JSON_DATA="$(readData "$REGISTRY_NAMESPACE.$IMAGE_NAME.keys" "$VAULT_DATA")"
+        signerkey=$(getJSONValue "$DEVOPS_SIGNER" "$JSON_DATA")
+        writeFile "$signerkey"
+        # Retrieve the signer passphrase
+        export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(getJSONValue "passphrase" "$signerkey")
       fi
 
       export DCT_DISABLED=false
